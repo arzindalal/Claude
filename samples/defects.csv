@@ -1,0 +1,4 @@
+id,title,description,status,severity,against_req_ids,against_test_ids
+DEF-1001,Cruise engages below 30 km/h,"In a regression run cruise mode engaged at 28 km/h, violating SYS-REQ-043 lower bound.",open,high,SYS-REQ-043,TC-SYS-043-01
+DEF-1002,Pedal validation misses 3-sample criterion,"SSR-01 requires 3 consecutive samples over threshold; current implementation flags after 1.",in_progress,critical,SSR-01,
+DEF-1003,Diagnostic log timestamp drift,"Log timestamp drifts by 120 ms on long runs, within spec but concerning.",open,low,SW-REQ-201,TC-SW-201-01

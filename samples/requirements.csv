@@ -1,0 +1,8 @@
+id,level,title,text,asil,parent_id,tags
+SG-01,safety_goal,Prevent unintended acceleration,"The system shall prevent unintended vehicle acceleration exceeding 2 m/s^2 when the accelerator pedal is not actuated.",ASIL-D,,safety
+TSR-01,tsr,Accelerator pedal signal integrity,"The accelerator pedal signal shall be validated against a redundant secondary sensor within 10 ms. On mismatch > 5% the system shall enter safe state.",ASIL-D,SG-01,safety
+SSR-01,ssr,Pedal signal validation algorithm,"The pedal validation algorithm shall compare primary and secondary sensor values every 5 ms and shall set fault flag PEDAL_MISMATCH when |primary - secondary| > 5% of range for 3 consecutive samples.",ASIL-D,TSR-01,safety
+SYS-REQ-042,system,Brake pedal signal range,"The brake pedal position signal shall be in the range [0%, 100%] with 0.5% resolution. Values outside this range shall be flagged as invalid.",ASIL-C,,
+SYS-REQ-043,system,Cruise control activation,"When the driver presses the cruise control button and vehicle speed is between 30 and 150 km/h the system activates cruise mode.",ASIL-B,,
+CUST-REQ-101,customer,Driver feedback,"The system should provide feedback to the driver.",QM,,
+SW-REQ-201,software,Diagnostic log entry,"On any ASIL-C or higher fault the software shall write a log entry with timestamp, fault code, and the triggering sensor value to non-volatile memory within 50 ms.",ASIL-C,,

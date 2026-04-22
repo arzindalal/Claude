@@ -1,0 +1,14 @@
+id,text,title,asil_level,req_type,status,parent_id
+SG-001,"The system shall prevent unintended acceleration of the vehicle in all operating conditions.",Unintended Acceleration Prevention,D,Safety Goal,Active,
+SG-002,"The system shall detect and respond to loss of vehicle steering control within 50ms.",Steering Loss Detection,C,Safety Goal,Active,
+TSR-001,"The Electronic Control Unit (ECU) shall monitor the accelerator pedal sensor voltage within the range 0.5V–4.5V at a minimum rate of 10ms.",Accelerator Pedal Sensor Monitoring,D,TSR,Active,SG-001
+TSR-002,"The ECU shall transition to a safe state (engine torque reduction to 0 Nm) within 20ms upon detection of a sensor out-of-range condition.",Safe State Transition on Sensor Fault,D,TSR,Active,SG-001
+TSR-003,"The steering angle sensor shall be read at minimum 5ms cycle time and validated against a redundant sensor with a deviation threshold of ±2°.",Steering Angle Sensor Redundancy,C,TSR,Active,SG-002
+SSR-001,"The software shall implement a first-order plausibility check on accelerator pedal sensor values comparing primary and secondary channels; a difference exceeding 0.2V shall raise DiagnosticEvent_APS_Mismatch.",Accelerator Pedal Sensor SW Plausibility,D,SSR,Active,TSR-001
+SSR-002,"The software shall activate the torque-reduction safe state within two consecutive monitoring cycles (20ms) upon a latched DiagnosticEvent_APS_Mismatch.",Torque Reduction Trigger,D,SSR,Active,TSR-002
+SSR-003,"The software shall log all diagnostic events to non-volatile memory with a timestamp accurate to ±1ms.",Diagnostic Event Logging,B,SSR,Active,TSR-001
+REQ-001,"The system shall respond to any driver input within 50ms under normal operating conditions.",System Input Response Time,B,Functional,Active,
+REQ-002,"The system shall maintain CAN bus communication with a maximum latency of 5ms between ECU nodes.",CAN Bus Latency,A,Functional,Active,
+REQ-003,"The system shall support firmware updates via the OBD-II diagnostic interface without interrupting vehicle operation.",OTA Firmware Update,QM,Functional,Active,
+REQ-004,"The system shall log all CAN bus errors exceeding a burst rate of 10 errors per second to persistent storage.",CAN Error Logging,A,Functional,Active,REQ-002
+REQ-005,"The brake pressure sensor shall be sampled at a minimum rate of 20ms and validated for plausibility against vehicle speed data.","Brake Pressure Sensor Sampling",C,Safety,Active,

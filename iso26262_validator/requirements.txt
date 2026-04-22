@@ -1,0 +1,22 @@
+# Core storage
+sqlalchemy>=2.0
+chromadb>=0.5
+sentence-transformers>=2.7
+
+# File parsing
+pandas>=2.2
+openpyxl>=3.1
+pdfplumber>=0.10
+python-docx>=1.1
+
+# API layer
+fastapi>=0.110
+uvicorn[standard]>=0.29
+anthropic>=0.25
+
+# CLI + utilities
+typer>=0.12
+
+# Dev / test
+pytest>=8.0
+pytest-cov>=5.0

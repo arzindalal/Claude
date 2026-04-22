@@ -1,0 +1,39 @@
+{# HTMX partial: table rows injected into #req-tbody on filter change #}
+{% for req in requirements %}
+<tr class="border-b border-gray-100 hover:bg-blue-50 cursor-pointer transition-colors"
+    hx-get="/partials/requirements/{{ req.id }}"
+    hx-target="#detail-panel"
+    hx-swap="innerHTML">
+
+  <td class="px-3 py-2 font-mono text-blue-700">{{ req.id }}</td>
+
+  <td class="px-3 py-2 max-w-[200px]">
+    <span class="truncate block" title="{{ req.title }}">{{ req.title or '—' }}</span>
+  </td>
+
+  <td class="px-3 py-2 text-center">
+    <span class="inline-block px-1.5 py-0.5 rounded font-bold text-[11px]
+      {% if req.asil_level == 'D' %}bg-red-100 text-red-800
+      {% elif req.asil_level == 'C' %}bg-orange-100 text-orange-800
+      {% elif req.asil_level == 'B' %}bg-yellow-100 text-yellow-800
+      {% elif req.asil_level == 'A' %}bg-green-100 text-green-800
+      {% else %}bg-gray-100 text-gray-600
+      {% endif %}">{{ req.asil_level }}</span>
+  </td>
+
+  <td class="px-3 py-2 text-gray-500">{{ req.req_type }}</td>
+
+  <td class="px-3 py-2">
+    <span class="inline-block px-1.5 py-0.5 rounded text-[11px]
+      {% if req.coverage_status == 'Covered' %}bg-green-100 text-green-800
+      {% elif req.coverage_status == 'Partially Covered' %}bg-yellow-100 text-yellow-800
+      {% elif req.coverage_status == 'At Risk' %}bg-orange-100 text-orange-800
+      {% elif req.coverage_status == 'Not Covered' %}bg-red-100 text-red-800
+      {% else %}bg-gray-100 text-gray-500
+      {% endif %}">{{ req.coverage_status }}</span>
+  </td>
+</tr>
+{% endfor %}
+{% if not requirements %}
+<tr><td colspan="5" class="px-3 py-6 text-center text-gray-400">No matching requirements.</td></tr>
+{% endif %}

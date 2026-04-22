@@ -1,0 +1,130 @@
+{# HTMX partial: validation result cards swapped into #validation-result #}
+{% set vd = result.overall_verdict %}
+
+<div class="space-y-3 text-xs">
+
+  {# ── Overall verdict banner ───────────────────────────────────────────── #}
+  <div class="flex items-center justify-between p-3 rounded-lg border
+    {% if vd == 'Pass' %}bg-green-50 border-green-200
+    {% elif vd == 'Fail' %}bg-red-50 border-red-200
+    {% else %}bg-yellow-50 border-yellow-200
+    {% endif %}">
+    <div>
+      <p class="text-[10px] text-gray-400 uppercase tracking-wider">Overall Verdict</p>
+      <p class="font-bold text-sm mt-0.5
+        {% if vd == 'Pass' %}text-green-800
+        {% elif vd == 'Fail' %}text-red-800
+        {% else %}text-yellow-800
+        {% endif %}">{{ vd }}</p>
+    </div>
+    <span class="px-2 py-1 rounded text-xs font-semibold
+      {% if result.coverage_status == 'Covered' %}bg-green-100 text-green-800
+      {% elif result.coverage_status == 'Partially Covered' %}bg-yellow-100 text-yellow-800
+      {% elif result.coverage_status == 'At Risk' %}bg-orange-100 text-orange-800
+      {% elif result.coverage_status == 'Not Covered' %}bg-red-100 text-red-800
+      {% else %}bg-gray-100 text-gray-500
+      {% endif %}">{{ result.coverage_status }}</span>
+  </div>
+
+  {# ── Score cards ──────────────────────────────────────────────────────── #}
+  <div class="grid grid-cols-3 gap-2">
+    <div class="bg-gray-50 rounded p-2 text-center border border-gray-100">
+      <p class="text-[10px] text-gray-400">Quality</p>
+      <p class="font-bold text-base mt-0.5
+        {% if result.quality.score >= 70 %}text-green-700
+        {% elif result.quality.score >= 50 %}text-yellow-700
+        {% else %}text-red-700
+        {% endif %}">{{ result.quality.score }}</p>
+    </div>
+    <div class="bg-gray-50 rounded p-2 text-center border border-gray-100">
+      <p class="text-[10px] text-gray-400">Defect Risk</p>
+      <p class="font-semibold mt-0.5
+        {% if result.defect_risk.risk_level == 'Low' %}text-green-700
+        {% elif result.defect_risk.risk_level == 'Medium' %}text-yellow-700
+        {% elif result.defect_risk.risk_level == 'High' %}text-orange-700
+        {% else %}text-red-700
+        {% endif %}">{{ result.defect_risk.risk_level }}</p>
+    </div>
+    <div class="bg-gray-50 rounded p-2 text-center border border-gray-100">
+      <p class="text-[10px] text-gray-400">Safety Chain</p>
+      <p class="font-semibold mt-0.5
+        {% if result.safety_chain.chain_complete %}text-green-700
+        {% else %}text-red-700
+        {% endif %}">
+        {% if result.safety_chain.chain_complete %}Complete{% else %}Broken{% endif %}
+      </p>
+    </div>
+  </div>
+
+  {# ── Quality issues ───────────────────────────────────────────────────── #}
+  {% if result.quality.issues %}
+  <div>
+    <p class="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-1">Quality Issues</p>
+    <ul class="space-y-0.5">
+      {% for issue in result.quality.issues %}
+      <li class="flex gap-1 text-red-700"><span class="flex-shrink-0">•</span>{{ issue }}</li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% endif %}
+
+  {# ── Missing test levels ──────────────────────────────────────────────── #}
+  {% if result.traceability.missing_levels %}
+  <div>
+    <p class="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-1">Missing Test Levels</p>
+    <div class="flex flex-wrap gap-1">
+      {% for lvl in result.traceability.missing_levels %}
+      <span class="bg-red-100 text-red-700 text-[10px] px-1.5 py-0.5 rounded">{{ lvl }}</span>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+  {# ── Safety chain gaps ────────────────────────────────────────────────── #}
+  {% if result.safety_chain.gaps %}
+  <div>
+    <p class="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-1">Safety Chain Gaps</p>
+    <ul class="space-y-0.5">
+      {% for gap in result.safety_chain.gaps %}
+      <li class="flex gap-1 text-orange-700"><span class="flex-shrink-0">•</span>{{ gap }}</li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% endif %}
+
+  {# ── Suggestions ──────────────────────────────────────────────────────── #}
+  {% if result.quality.suggestions %}
+  <div>
+    <p class="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-1">Suggestions</p>
+    <ul class="space-y-0.5">
+      {% for sug in result.quality.suggestions %}
+      <li class="flex gap-1 text-blue-700"><span class="flex-shrink-0">→</span>{{ sug }}</li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% endif %}
+
+  {# ── Traceability summary ─────────────────────────────────────────────── #}
+  {% if result.traceability.verdict_summary %}
+  <div class="bg-gray-50 rounded p-2 border border-gray-100">
+    <p class="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-1">Test Summary</p>
+    <p class="text-gray-700">{{ result.traceability.verdict_summary }}</p>
+    {% if result.traceability.notes %}
+    <p class="text-gray-500 mt-1 italic">{{ result.traceability.notes }}</p>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  {# ── Defect assessment ────────────────────────────────────────────────── #}
+  {% if result.defect_risk.assessment %}
+  <div class="bg-gray-50 rounded p-2 border border-gray-100">
+    <p class="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-1">Defect Assessment</p>
+    <p class="text-gray-700">{{ result.defect_risk.assessment }}</p>
+  </div>
+  {% endif %}
+
+  <p class="text-[10px] text-gray-300 pt-1">
+    {{ result.timestamp[:19] }}Z · {{ result.model_used }}
+  </p>
+
+</div>

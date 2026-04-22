@@ -1,0 +1,27 @@
+# Python bytecode
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Distribution / packaging
+*.egg-info/
+dist/
+build/
+
+# Test / coverage artefacts
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Data stores (generated at runtime)
+data/kb.sqlite
+data/chroma/
+
+# IDE
+.vscode/
+.idea/

@@ -16,6 +16,16 @@
       {% if at_risk > 0 %}
       <span class="text-orange-300">{{ at_risk }} at risk</span>
       {% endif %}
+      <div class="flex items-center gap-2">
+        <a href="/api/export/excel"
+           class="bg-green-600 hover:bg-green-700 text-white text-xs px-3 py-1.5 rounded transition-colors">
+          Export Excel
+        </a>
+        <a href="/api/export/csv"
+           class="bg-gray-600 hover:bg-gray-700 text-white text-xs px-3 py-1.5 rounded transition-colors">
+          Export CSV
+        </a>
+      </div>
     </div>
   </header>
 

@@ -21,7 +21,7 @@ from fastapi import FastAPI
 from ..kb_ingestor.database import get_engine
 from ..kb_ingestor.embedder import KBEmbedder
 from ..kb_ingestor.models import Base
-from .routers import rest, ui
+from .routers import export, rest, ui
 
 _DB_PATH = os.environ.get("KB_DB", "data/kb.sqlite")
 _CHROMA_PATH = os.environ.get("KB_CHROMA", "data/chroma")
@@ -44,6 +44,7 @@ def create_app() -> FastAPI:
     )
     application.include_router(ui.router)
     application.include_router(rest.router, prefix="/api", tags=["REST"])
+    application.include_router(export.router, prefix="/api", tags=["Export"])
     return application
 
 

@@ -26,16 +26,20 @@ import argparse
 import logging
 import sys
 from pathlib import Path
+from typing import Optional
 
+import pandas as pd
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from .database import get_engine, get_session
 from .embedder import KBEmbedder
-from .models import Defect, Requirement, TestCase
+from .models import Defect, Requirement, TestCase, req_test_link, req_defect_link
 from .parsers.csv_parser import (
     parse_defects_csv,
     parse_requirements_csv,
     parse_test_cases_csv,
+    detect_artifact_type,
 )
 from .parsers.excel_parser import parse_excel
 
@@ -44,7 +48,51 @@ log = logging.getLogger(__name__)
 
 _SUPPORTED_EXTENSIONS = {".csv", ".xlsx", ".xls"}
 
-ArtifactType = str | None  # "requirements" | "test_cases" | "defects" | None
+# Fields on Requirement that must never be overwritten during upsert because
+# they are computed by Phase 2 rather than derived from source files.
+_REQ_PROTECTED_FIELDS = {"coverage_status"}
+
+
+# ── DB-level link existence checks (fix for C-3: identity-based guard) ────────
+
+def _tc_link_exists(session: Session, req_id: str, test_id: str) -> bool:
+    return session.execute(
+        select(req_test_link).where(
+            req_test_link.c.req_id == req_id,
+            req_test_link.c.test_id == test_id,
+        )
+    ).first() is not None
+
+
+def _defect_link_exists(session: Session, req_id: str, defect_id: str) -> bool:
+    return session.execute(
+        select(req_defect_link).where(
+            req_defect_link.c.req_id == req_id,
+            req_defect_link.c.defect_id == defect_id,
+        )
+    ).first() is not None
+
+
+# ── Atomic commit helper ──────────────────────────────────────────────────────
+
+def _commit_with_embedder(
+    session: Session,
+    embedder_fn,          # callable: () -> None
+) -> None:
+    """Flush SQL constraints, call the embedder, then commit — or rollback all.
+
+    Ordering: flush (validate) → embedder (may fail) → commit.
+    If the embedder raises, the session is rolled back so SQLite stays clean.
+    If commit raises after a successful embedder call, the session is rolled back;
+    the vector upsert is idempotent so a subsequent re-ingest will re-sync it.
+    """
+    try:
+        session.flush()   # validate FK constraints without writing to disk
+        embedder_fn()     # write to ChromaDB while SQL is still uncommitted
+        session.commit()
+    except Exception:
+        session.rollback()
+        raise
 
 
 # ── Per-type ingest functions ─────────────────────────────────────────────────
@@ -60,7 +108,7 @@ def ingest_requirements(
         existing = session.get(Requirement, r["id"])
         if existing:
             for key, val in r.items():
-                if key != "id" and hasattr(existing, key):
+                if key != "id" and key not in _REQ_PROTECTED_FIELDS and hasattr(existing, key):
                     setattr(existing, key, val)
         else:
             session.add(
@@ -73,6 +121,8 @@ def ingest_requirements(
                     req_type=r.get("req_type", "Functional"),
                     status=r.get("status", "Active"),
                     parent_id=r.get("parent_id"),
+                    asil_decomposition=r.get("asil_decomposition", False),
+                    decomposition_partner_id=r.get("decomposition_partner_id"),
                 )
             )
             new_count += 1
@@ -87,25 +137,37 @@ def ingest_requirements(
             },
         })
 
-    session.commit()
-    embedder.add_requirements(embed_batch)
+    _commit_with_embedder(session, lambda: embedder.add_requirements(embed_batch))
     return new_count
 
 
 def ingest_test_cases(
     records: list[dict], session: Session, embedder: KBEmbedder
 ) -> int:
-    """Upsert test-case records and wire Requirement ↔ TestCase links."""
+    """Upsert test-case records and reconcile Requirement ↔ TestCase links."""
     new_count = 0
     embed_batch: list[dict] = []
 
     for t in records:
+        incoming_req_ids = set(t.get("linked_req_ids", []))
         existing = session.get(TestCase, t["id"])
+
         if existing:
             for key, val in t.items():
                 if key not in ("id", "linked_req_ids") and hasattr(existing, key):
                     setattr(existing, key, val)
             tc = existing
+
+            # Reconcile links: remove stale, add new (fix for R2:H-2)
+            current_req_ids = {r.id for r in tc.requirements}
+            for stale_id in current_req_ids - incoming_req_ids:
+                stale_req = session.get(Requirement, stale_id)
+                if stale_req is not None:
+                    stale_req.test_cases.remove(tc)
+            for new_id in incoming_req_ids - current_req_ids:
+                new_req = session.get(Requirement, new_id)
+                if new_req is not None:
+                    new_req.test_cases.append(tc)
         else:
             tc = TestCase(
                 id=t["id"],
@@ -114,54 +176,69 @@ def ingest_test_cases(
                 preconditions=t.get("preconditions", ""),
                 steps=t.get("steps", ""),
                 expected_result=t.get("expected_result", ""),
-                level=t.get("level", "System"),
-                status=t.get("status", "Open"),
+                level=t.get("level", "SW Qualification Testing"),
+                verification_method=t.get("verification_method", "Dynamic Test"),
+                lifecycle_state=t.get("lifecycle_state", "Draft"),
+                verdict=t.get("verdict", "Not Run"),
                 source_file=t.get("source_file", ""),
             )
             session.add(tc)
             new_count += 1
 
-        for req_id in t.get("linked_req_ids", []):
-            req = session.get(Requirement, req_id)
-            if req is not None and tc not in req.test_cases:
-                req.test_cases.append(tc)
+            # Wire initial links using DB-level existence check (fix for C-3)
+            for req_id in incoming_req_ids:
+                req = session.get(Requirement, req_id)
+                if req is not None and not _tc_link_exists(session, req_id, tc.id):
+                    req.test_cases.append(tc)
 
-        steps_text = t.get("steps", "")
         embed_batch.append({
             "id": t["id"],
             "text": " ".join(filter(None, [
                 t["title"],
                 t.get("objective", ""),
-                steps_text,
+                t.get("steps", ""),
                 t.get("expected_result", ""),
             ])),
             "metadata": {
-                "level": t.get("level", "System"),
-                "status": t.get("status", "Open"),
+                "level": t.get("level", "SW Qualification Testing"),
+                "lifecycle_state": t.get("lifecycle_state", "Draft"),
+                "verdict": t.get("verdict", "Not Run"),
                 "source_file": t.get("source_file", ""),
-                "linked_req_ids": ",".join(t.get("linked_req_ids", [])),
+                "linked_req_ids": ",".join(sorted(incoming_req_ids)),
             },
         })
 
-    session.commit()
-    embedder.add_test_cases(embed_batch)
+    _commit_with_embedder(session, lambda: embedder.add_test_cases(embed_batch))
     return new_count
 
 
 def ingest_defects(
     records: list[dict], session: Session, embedder: KBEmbedder
 ) -> int:
-    """Upsert defect records and wire Requirement ↔ Defect links."""
+    """Upsert defect records and reconcile Requirement ↔ Defect links."""
     new_count = 0
     embed_batch: list[dict] = []
 
     for d in records:
+        incoming_req_ids = set(d.get("linked_req_ids", []))
         existing = session.get(Defect, d["id"])
+
         if existing:
             for key, val in d.items():
                 if key not in ("id", "linked_req_ids") and hasattr(existing, key):
                     setattr(existing, key, val)
             defect = existing
+
+            # Reconcile links: remove stale, add new
+            current_req_ids = {r.id for r in defect.requirements}
+            for stale_id in current_req_ids - incoming_req_ids:
+                stale_req = session.get(Requirement, stale_id)
+                if stale_req is not None:
+                    stale_req.defects.remove(defect)
+            for new_id in incoming_req_ids - current_req_ids:
+                new_req = session.get(Requirement, new_id)
+                if new_req is not None:
+                    new_req.defects.append(defect)
         else:
             defect = Defect(
                 id=d["id"],
@@ -174,10 +251,11 @@ def ingest_defects(
             session.add(defect)
             new_count += 1
 
-        for req_id in d.get("linked_req_ids", []):
-            req = session.get(Requirement, req_id)
-            if req is not None and defect not in req.defects:
-                req.defects.append(defect)
+            # Wire initial links using DB-level existence check (fix for C-3)
+            for req_id in incoming_req_ids:
+                req = session.get(Requirement, req_id)
+                if req is not None and not _defect_link_exists(session, req_id, defect.id):
+                    req.defects.append(defect)
 
         embed_batch.append({
             "id": d["id"],
@@ -186,37 +264,30 @@ def ingest_defects(
                 "severity": d.get("severity", "Medium"),
                 "status": d.get("status", "Open"),
                 "source_file": d.get("source_file", ""),
-                "linked_req_ids": ",".join(d.get("linked_req_ids", [])),
+                "linked_req_ids": ",".join(sorted(incoming_req_ids)),
             },
         })
 
-    session.commit()
-    embedder.add_defects(embed_batch)
+    _commit_with_embedder(session, lambda: embedder.add_defects(embed_batch))
     return new_count
 
 
-# ── Auto-detect CSV type ──────────────────────────────────────────────────────
+# ── CSV type detection (shared logic, no double-read) ─────────────────────────
 
-def _detect_csv_type(file_path: str) -> ArtifactType:
-    """Infer artifact type from column headers (no data read)."""
-    import pandas as pd
-
+def _resolve_csv_type(file_path: str, explicit_type: Optional[str]) -> str:
+    """Return the artifact type for a CSV, reading headers exactly once."""
+    if explicit_type:
+        return explicit_type
     df = pd.read_csv(file_path, nrows=0, dtype=str)
     cols = {c.lower().strip() for c in df.columns}
-
-    if cols & {"steps", "test_steps", "procedure", "expected_result", "expected result", "pass criteria"}:
-        return "test_cases"
-    if cols & {"severity", "resolution", "issue_id", "jira_id"}:
-        return "defects"
-    # Fall back to requirements — will raise if mandatory cols are absent
-    return "requirements"
+    return detect_artifact_type(cols)
 
 
 # ── File-level dispatcher ─────────────────────────────────────────────────────
 
 def ingest_file(
     file_path: str,
-    artifact_type: ArtifactType,
+    artifact_type: Optional[str],
     session: Session,
     embedder: KBEmbedder,
 ) -> None:
@@ -233,7 +304,7 @@ def ingest_file(
         return
 
     if suffix == ".csv":
-        resolved_type = artifact_type or _detect_csv_type(file_path)
+        resolved_type = _resolve_csv_type(file_path, artifact_type)
         if resolved_type == "requirements":
             records = parse_requirements_csv(file_path)
             n = ingest_requirements(records, session, embedder)
@@ -271,7 +342,7 @@ def _build_parser() -> argparse.ArgumentParser:
     return p
 
 
-def main(argv: list[str] | None = None) -> None:
+def main(argv: Optional[list[str]] = None) -> None:
     args = _build_parser().parse_args(argv)
 
     if not args.file and not args.dir:
@@ -288,23 +359,30 @@ def main(argv: list[str] | None = None) -> None:
 
         if args.dir:
             dir_path = Path(args.dir)
-            files = sorted(f for f in dir_path.iterdir() if f.suffix.lower() in _SUPPORTED_EXTENSIONS)
+            files = sorted(
+                f for f in dir_path.iterdir()
+                if f.suffix.lower() in _SUPPORTED_EXTENSIONS
+            )
             if not files:
                 log.warning("No supported files found in %s", args.dir)
             for f in files:
                 try:
                     ingest_file(str(f), args.artifact_type, session, embedder)
                 except Exception as exc:
+                    # Rollback poisoned session state before attempting next file
+                    session.rollback()
                     log.error("Failed to ingest %s: %s", f.name, exc)
 
-        # Summary
         req_total = session.query(Requirement).count()
         tc_total = session.query(TestCase).count()
         def_total = session.query(Defect).count()
         vec_counts = embedder.counts()
         log.info("")
         log.info("Knowledge Base Summary")
-        log.info("  SQLite   — Requirements: %d | Test Cases: %d | Defects: %d", req_total, tc_total, def_total)
+        log.info(
+            "  SQLite   — Requirements: %d | Test Cases: %d | Defects: %d",
+            req_total, tc_total, def_total,
+        )
         log.info(
             "  ChromaDB — Requirements: %d | Test Cases: %d | Defects: %d",
             vec_counts["requirements"], vec_counts["test_cases"], vec_counts["defects"],

@@ -2,15 +2,13 @@
 Excel workbook parser for DOORS, Cradle, and generic multi-sheet exports.
 
 Sheet type is detected first from the sheet name, then from column headers.
-Safety Goal / TSR / SSR sheets are normalised to the Requirement model with
-the appropriate req_type value so the rest of the pipeline handles them
+Safety Goal / FSR / TSR / SSR sheets are normalised to the Requirement model
+with the appropriate req_type value so the rest of the pipeline handles them
 uniformly.
 """
 
 from __future__ import annotations
 
-import re
-from pathlib import Path
 from typing import Optional
 
 import pandas as pd
@@ -22,6 +20,9 @@ from .csv_parser import (
     _find_column,
     _get,
     _split_ids,
+    _resolve_tc_status,
+    _LEVEL_NORMALISE_MAP,
+    detect_artifact_type,
 )
 
 
@@ -29,6 +30,7 @@ from .csv_parser import (
 
 _SHEET_HINTS: dict[str, list[str]] = {
     "safety_goals": ["safety goal", "safety goals", "hazard", "hara", "sg"],
+    "fsr":          ["fsr", "functional safety req"],
     "tsr":          ["tsr", "technical safety", "tech safety"],
     "ssr":          ["ssr", "software safety", "sw safety"],
     "requirements": ["requirement", "req", "sys req", "customer req", "functional req"],
@@ -38,6 +40,7 @@ _SHEET_HINTS: dict[str, list[str]] = {
 
 _SAFETY_TYPE_MAP = {
     "safety_goals": "Safety Goal",
+    "fsr": "FSR",
     "tsr": "TSR",
     "ssr": "SSR",
 }
@@ -53,21 +56,22 @@ def _detect_sheet_type_by_name(sheet_name: str) -> Optional[str]:
 
 def _detect_sheet_type_by_columns(df: pd.DataFrame) -> Optional[str]:
     cols = {c.lower().strip() for c in df.columns}
-    # Test cases have step/expected columns
-    if cols & {"steps", "test_steps", "procedure", "expected_result", "expected result", "pass criteria"}:
-        return "test_cases"
-    # Defects have severity/resolution
-    if cols & {"severity", "resolution", "jira_id", "issue_id"}:
-        return "defects"
-    # Safety artifacts have ASIL and a recognisable ID prefix
-    if cols & {"asil", "asil_level", "asil level", "object_text", "requirement_text"}:
-        return "requirements"
-    return None
+    artifact_type = detect_artifact_type(cols)
+    # detect_artifact_type falls back to "requirements" for unknown — only return
+    # that if there are columns that actually look like requirements.
+    if artifact_type == "requirements":
+        if not (cols & {"asil", "asil_level", "asil level", "object_text",
+                        "requirement_text", "req_id", "requirement_id", "object_id",
+                        "id", "text", "statement"}):
+            return None
+    return artifact_type
 
 
 # ── Per-sheet parsing helpers ─────────────────────────────────────────────────
 
-def _parse_requirement_df(df: pd.DataFrame, source_file: str, req_type_override: Optional[str] = None) -> list[dict]:
+def _parse_requirement_df(
+    df: pd.DataFrame, source_file: str, req_type_override: Optional[str] = None
+) -> list[dict]:
     df = df.copy()
     df.columns = df.columns.str.strip()
     col = {field: _find_column(df, aliases) for field, aliases in REQ_COLUMN_ALIASES.items()}
@@ -107,6 +111,9 @@ def _parse_test_case_df(df: pd.DataFrame, source_file: str) -> list[dict]:
         if not tc_id:
             continue
         linked_raw = _get(row, col["linked_req_ids"])
+        lifecycle_state, verdict = _resolve_tc_status(row, col)
+        raw_level = _get(row, col["level"], "SW Qualification Testing")
+        level = _LEVEL_NORMALISE_MAP.get(raw_level.lower(), raw_level)
         records.append({
             "id": tc_id,
             "title": _get(row, col["title"]),
@@ -114,8 +121,10 @@ def _parse_test_case_df(df: pd.DataFrame, source_file: str) -> list[dict]:
             "preconditions": _get(row, col["preconditions"]),
             "steps": _get(row, col["steps"]),
             "expected_result": _get(row, col["expected_result"]),
-            "level": _get(row, col["level"], "System"),
-            "status": _get(row, col["status"], "Open"),
+            "level": level,
+            "verification_method": _get(row, col["verification_method"], "Dynamic Test"),
+            "lifecycle_state": lifecycle_state,
+            "verdict": verdict,
             "linked_req_ids": _split_ids(linked_raw) if linked_raw else [],
             "source_file": source_file,
         })
@@ -151,12 +160,11 @@ def _parse_defect_df(df: pd.DataFrame, source_file: str) -> list[dict]:
 # ── Public API ────────────────────────────────────────────────────────────────
 
 def parse_excel(file_path: str) -> dict[str, list[dict]]:
-    """
-    Parse an Excel workbook and return normalised artifact records grouped by type.
+    """Parse an Excel workbook and return normalised artifact records grouped by type.
 
     Returns:
         {
-            "requirements": [...],   # includes SG, TSR, SSR normalised records
+            "requirements": [...],   # includes SG, FSR, TSR, SSR normalised records
             "test_cases":   [...],
             "defects":      [...],
         }
@@ -167,27 +175,33 @@ def parse_excel(file_path: str) -> dict[str, list[dict]]:
         "defects": [],
     }
 
-    xl = pd.ExcelFile(file_path)
+    with pd.ExcelFile(file_path) as xl:
+        for sheet_name in xl.sheet_names:
+            df: pd.DataFrame = xl.parse(sheet_name, dtype=str)  # type: ignore[assignment]
 
-    for sheet_name in xl.sheet_names:
-        df: pd.DataFrame = xl.parse(sheet_name, dtype=str)  # type: ignore[assignment]
-        if df.empty:
-            continue
+            # Skip truly empty sheets and header-only sheets (no data rows)
+            if not isinstance(df, pd.DataFrame) or len(df) == 0:
+                continue
 
-        sheet_type = _detect_sheet_type_by_name(sheet_name) or _detect_sheet_type_by_columns(df)
-        if sheet_type is None:
-            continue
+            sheet_type = (
+                _detect_sheet_type_by_name(sheet_name)
+                or _detect_sheet_type_by_columns(df)
+            )
+            if sheet_type is None:
+                continue
 
-        source = str(file_path)
+            source = str(file_path)
 
-        if sheet_type in _SAFETY_TYPE_MAP:
-            records = _parse_requirement_df(df, source, req_type_override=_SAFETY_TYPE_MAP[sheet_type])
-            result["requirements"].extend(records)
-        elif sheet_type == "requirements":
-            result["requirements"].extend(_parse_requirement_df(df, source))
-        elif sheet_type == "test_cases":
-            result["test_cases"].extend(_parse_test_case_df(df, source))
-        elif sheet_type == "defects":
-            result["defects"].extend(_parse_defect_df(df, source))
+            if sheet_type in _SAFETY_TYPE_MAP:
+                records = _parse_requirement_df(
+                    df, source, req_type_override=_SAFETY_TYPE_MAP[sheet_type]
+                )
+                result["requirements"].extend(records)
+            elif sheet_type == "requirements":
+                result["requirements"].extend(_parse_requirement_df(df, source))
+            elif sheet_type == "test_cases":
+                result["test_cases"].extend(_parse_test_case_df(df, source))
+            elif sheet_type == "defects":
+                result["defects"].extend(_parse_defect_df(df, source))
 
     return result

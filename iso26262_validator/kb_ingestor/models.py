@@ -2,13 +2,13 @@
 SQLAlchemy ORM models for the ISO 26262 validation knowledge base.
 
 Hierarchy supported:
-  Safety Goal (SG) → TSR → SSR  (via parent_id self-referential FK)
-  Requirement ↔ TestCase         (many-to-many via req_test_link)
-  Requirement ↔ Defect           (many-to-many via req_defect_link)
+  Safety Goal (SG) → FSR → TSR → SSR  (via parent_id self-referential FK)
+  Requirement ↔ TestCase              (many-to-many via req_test_link)
+  Requirement ↔ Defect               (many-to-many via req_defect_link)
 """
 
 import enum
-from sqlalchemy import Column, String, Text, ForeignKey, Table
+from sqlalchemy import Boolean, Column, String, Text, ForeignKey, Table
 from sqlalchemy.orm import DeclarativeBase, relationship
 
 
@@ -48,8 +48,9 @@ class RequirementType(str, enum.Enum):
     SAFETY = "Safety"
     NON_FUNCTIONAL = "Non-Functional"
     SAFETY_GOAL = "Safety Goal"
-    TSR = "TSR"
-    SSR = "SSR"
+    FSR = "FSR"   # Functional Safety Requirement (ISO 26262 Part 4)
+    TSR = "TSR"   # Technical Safety Requirement (ISO 26262 Part 4)
+    SSR = "SSR"   # Software Safety Requirement (ISO 26262 Part 6)
 
 
 class CoverageStatus(str, enum.Enum):
@@ -60,11 +61,36 @@ class CoverageStatus(str, enum.Enum):
     PENDING = "Pending"
 
 
+# ISO 26262 Part 6 test levels (§9–§12)
 class TestLevel(str, enum.Enum):
-    UNIT = "Unit"
-    INTEGRATION = "Integration"
-    SYSTEM = "System"
-    ACCEPTANCE = "Acceptance"
+    SW_UNIT = "SW Unit Testing"
+    SW_INTEGRATION = "SW Integration Testing"
+    SW_QUALIFICATION = "SW Qualification Testing"
+    HW_SW_INTEGRATION = "HW/SW Integration Testing"
+
+
+class TestLifecycleState(str, enum.Enum):
+    DRAFT = "Draft"
+    APPROVED = "Approved"
+    READY = "Ready"
+    EXECUTED = "Executed"
+
+
+class TestVerdict(str, enum.Enum):
+    NOT_RUN = "Not Run"
+    PASS = "Pass"
+    FAIL = "Fail"
+    BLOCKED = "Blocked"
+    NA = "N/A"
+
+
+class VerificationMethod(str, enum.Enum):
+    DYNAMIC_TEST = "Dynamic Test"
+    SIMULATION = "Simulation"
+    FORMAL_VERIFICATION = "Formal Verification"
+    REVIEW = "Review"
+    BACK_TO_BACK = "Back-to-Back Test"
+    HIL = "HW-in-the-Loop"
 
 
 # ── ORM Models ────────────────────────────────────────────────────────────────
@@ -81,15 +107,27 @@ class Requirement(Base):
     status = Column(String, default="Active")
     coverage_status = Column(String, default=CoverageStatus.PENDING)
 
-    # Self-referential FK for SG → TSR → SSR chain
+    # Self-referential FK for SG → FSR → TSR → SSR chain
     parent_id = Column(String, ForeignKey("requirements.id"), nullable=True)
 
+    # ASIL decomposition tracking (ISO 26262-9): stores the ID of the partner branch
+    asil_decomposition = Column(Boolean, default=False, nullable=False)
+    decomposition_partner_id = Column(String, nullable=True)
+
+    # many-to-one: child → parent
+    parent = relationship(
+        "Requirement",
+        back_populates="children",
+        foreign_keys=[parent_id],
+        remote_side=[id],
+    )
+    # one-to-many: parent → children
     children = relationship(
         "Requirement",
-        backref="parent",  # type: ignore[call-arg]
+        back_populates="parent",
         foreign_keys=[parent_id],
-        remote_side="Requirement.id",
     )
+
     test_cases = relationship("TestCase", secondary=req_test_link, back_populates="requirements")
     defects = relationship("Defect", secondary=req_defect_link, back_populates="requirements")
 
@@ -106,14 +144,16 @@ class TestCase(Base):
     preconditions = Column(Text, default="")
     steps = Column(Text, default="")
     expected_result = Column(Text, default="")
-    level = Column(String, default=TestLevel.SYSTEM)
-    status = Column(String, default="Open")
+    level = Column(String, default=TestLevel.SW_QUALIFICATION)
+    verification_method = Column(String, default=VerificationMethod.DYNAMIC_TEST)
+    lifecycle_state = Column(String, default=TestLifecycleState.DRAFT)
+    verdict = Column(String, default=TestVerdict.NOT_RUN)
     source_file = Column(String, default="")
 
     requirements = relationship("Requirement", secondary=req_test_link, back_populates="test_cases")
 
     def __repr__(self) -> str:
-        return f"<TestCase {self.id} {self.title!r}>"
+        return f"<TestCase {self.id} [{self.lifecycle_state}/{self.verdict}] {self.title!r}>"
 
 
 class Defect(Base):

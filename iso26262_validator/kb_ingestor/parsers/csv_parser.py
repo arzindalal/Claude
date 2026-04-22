@@ -28,35 +28,79 @@ REQ_COLUMN_ALIASES: dict[str, list[str]] = {
 }
 
 TC_COLUMN_ALIASES: dict[str, list[str]] = {
-    "id":              ["test_id", "tc_id", "test case id", "testcase_id", "id"],
-    "title":           ["test_name", "summary", "title", "name"],
-    "objective":       ["purpose", "objective", "description"],
-    "preconditions":   ["pre-conditions", "precondition", "preconditions", "setup"],
-    "steps":           ["test_steps", "procedure", "actions", "steps"],
-    "expected_result": ["expected results", "pass criteria", "expected_result", "expected result"],
-    "level":           ["test_level", "test level", "level", "type"],
-    "status":          ["result", "state", "status"],
-    "linked_req_ids":  ["requirement_id", "covers", "traces_to", "linked_req_ids", "req_id"],
+    "id":                  ["test_id", "tc_id", "test case id", "testcase_id", "id"],
+    "title":               ["test_name", "summary", "title", "name"],
+    "objective":           ["purpose", "objective", "description"],
+    "preconditions":       ["pre-conditions", "precondition", "preconditions", "setup"],
+    "steps":               ["test_steps", "procedure", "actions", "steps"],
+    "expected_result":     ["expected results", "pass criteria", "expected_result", "expected result"],
+    "level":               ["test_level", "test level", "level", "type"],
+    "verification_method": ["verification_method", "verification method", "method", "test_method"],
+    "lifecycle_state":     ["lifecycle_state", "lifecycle state", "test_state"],
+    "verdict":             ["verdict", "test_result"],
+    "status":              ["result", "state", "status"],  # legacy fallback — mapped to lifecycle_state+verdict
+    "linked_req_ids":      ["requirement_id", "covers", "traces_to", "linked_req_ids", "req_id"],
 }
 
+# Note: "description" deliberately absent from "summary" aliases to prevent
+# a Jira CSV's single "description" column being consumed by summary and
+# leaving the description field empty.
 DEFECT_COLUMN_ALIASES: dict[str, list[str]] = {
     "id":              ["issue_id", "key", "defect_id", "jira_id", "id"],
-    "summary":         ["title", "subject", "summary", "description"],
+    "summary":         ["title", "subject", "summary"],
     "description":     ["details", "body", "comment", "description"],
     "severity":        ["impact", "priority", "severity"],
     "status":          ["resolution", "state", "status"],
     "linked_req_ids":  ["requirement_id", "affects", "relates_to", "linked_req_ids", "req_id"],
 }
 
+# Maps a legacy "status" cell value to (lifecycle_state, verdict).
+_LEGACY_TC_STATUS_MAP: dict[str, tuple[str, str]] = {
+    "open":     ("Draft",    "Not Run"),
+    "draft":    ("Draft",    "Not Run"),
+    "ready":    ("Ready",    "Not Run"),
+    "executed": ("Executed", "Not Run"),
+    "pass":     ("Executed", "Pass"),
+    "passed":   ("Executed", "Pass"),
+    "fail":     ("Executed", "Fail"),
+    "failed":   ("Executed", "Fail"),
+    "blocked":  ("Executed", "Blocked"),
+    "n/a":      ("Executed", "N/A"),
+}
+
+# Maps common level strings to ISO 26262 Part 6 test level values.
+_LEVEL_NORMALISE_MAP: dict[str, str] = {
+    "unit":              "SW Unit Testing",
+    "sw unit":           "SW Unit Testing",
+    "sw unit testing":   "SW Unit Testing",
+    "integration":       "SW Integration Testing",
+    "sw integration":    "SW Integration Testing",
+    "system":            "SW Qualification Testing",
+    "sw qualification":  "SW Qualification Testing",
+    "acceptance":        "SW Qualification Testing",
+    "hw/sw integration": "HW/SW Integration Testing",
+    "hw sw integration": "HW/SW Integration Testing",
+}
+
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 def _find_column(df: pd.DataFrame, aliases: list[str]) -> Optional[str]:
-    """Return the first df column that matches any alias (case-insensitive)."""
-    lower_to_original = {c.lower(): c for c in df.columns}
+    """Return the first df column that matches any alias (case-insensitive).
+
+    Iterates df.columns in order so the first occurrence wins when duplicate
+    case-folded names are present.
+    """
+    lower_to_original: dict[str, str] = {}
+    for col in df.columns:
+        lower = col.lower()
+        if lower not in lower_to_original:
+            lower_to_original[lower] = col
+
     for alias in aliases:
-        if alias.lower() in lower_to_original:
-            return lower_to_original[alias.lower()]
+        match = lower_to_original.get(alias.lower())
+        if match is not None:
+            return match
     return None
 
 
@@ -72,11 +116,24 @@ def _split_ids(raw: str) -> list[str]:
     return [part.strip() for part in re.split(r"[,;|]", raw) if part.strip()]
 
 
+def detect_artifact_type(columns: set[str]) -> str:
+    """Infer artifact type from a set of lower-cased column names.
+
+    Used by both the CSV ingest dispatcher and the Excel sheet classifier
+    to avoid duplicating detection logic.
+    """
+    if columns & {"steps", "test_steps", "procedure", "expected_result",
+                  "expected result", "pass criteria"}:
+        return "test_cases"
+    if columns & {"severity", "resolution", "issue_id", "jira_id"}:
+        return "defects"
+    return "requirements"
+
+
 # ── Public parsers ────────────────────────────────────────────────────────────
 
 def parse_requirements_csv(file_path: str) -> list[dict]:
-    """
-    Parse a requirements CSV and return a list of normalised requirement dicts.
+    """Parse a requirements CSV and return a list of normalised requirement dicts.
 
     Raises ValueError if mandatory columns (id, text) cannot be found.
     """
@@ -128,6 +185,11 @@ def parse_test_cases_csv(file_path: str) -> list[dict]:
         if not tc_id:
             continue
         linked_raw = _get(row, col["linked_req_ids"])
+
+        lifecycle_state, verdict = _resolve_tc_status(row, col)
+        raw_level = _get(row, col["level"], "SW Qualification Testing")
+        level = _LEVEL_NORMALISE_MAP.get(raw_level.lower(), raw_level)
+
         records.append({
             "id": tc_id,
             "title": _get(row, col["title"]),
@@ -135,12 +197,24 @@ def parse_test_cases_csv(file_path: str) -> list[dict]:
             "preconditions": _get(row, col["preconditions"]),
             "steps": _get(row, col["steps"]),
             "expected_result": _get(row, col["expected_result"]),
-            "level": _get(row, col["level"], "System"),
-            "status": _get(row, col["status"], "Open"),
+            "level": level,
+            "verification_method": _get(row, col["verification_method"], "Dynamic Test"),
+            "lifecycle_state": lifecycle_state,
+            "verdict": verdict,
             "linked_req_ids": _split_ids(linked_raw) if linked_raw else [],
             "source_file": str(file_path),
         })
     return records
+
+
+def _resolve_tc_status(row: pd.Series, col: dict) -> tuple[str, str]:
+    """Return (lifecycle_state, verdict) from explicit columns or legacy status mapping."""
+    explicit_state = _get(row, col.get("lifecycle_state"))
+    explicit_verdict = _get(row, col.get("verdict"))
+    if explicit_state:
+        return explicit_state, explicit_verdict or "Not Run"
+    legacy = _get(row, col.get("status"), "open").lower()
+    return _LEGACY_TC_STATUS_MAP.get(legacy, ("Draft", "Not Run"))
 
 
 def parse_defects_csv(file_path: str) -> list[dict]:

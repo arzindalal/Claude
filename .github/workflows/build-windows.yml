@@ -1,0 +1,58 @@
+name: Build Windows Installer
+
+# Runs automatically on every push to main or claude/* branches.
+# You can also trigger it manually from the Actions tab → "Run workflow".
+on:
+  push:
+    branches:
+      - main
+      - "claude/**"
+  workflow_dispatch:   # manual trigger button in the GitHub Actions UI
+
+jobs:
+  build-windows:
+    name: Build .exe installer
+    runs-on: windows-latest
+    timeout-minutes: 90   # PyTorch + sentence-transformers take a while
+
+    steps:
+      # ── 1. Get the code ──────────────────────────────────────────────────────
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # ── 2. Python ────────────────────────────────────────────────────────────
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"          # caches pip downloads between runs
+
+      # ── 3. Dependencies ──────────────────────────────────────────────────────
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r iso26262_validator/requirements.txt
+          pip install pyinstaller
+
+      # ── 4. PyInstaller bundle ────────────────────────────────────────────────
+      - name: Build with PyInstaller
+        run: pyinstaller ISO26262Validator.spec --clean --noconfirm
+
+      # ── 5. Inno Setup — produces the .exe installer ──────────────────────────
+      - name: Install Inno Setup 6
+        run: choco install innosetup --version=6.3.3 --no-progress -y
+
+      - name: Compile Windows installer
+        shell: cmd
+        run: |
+          if not exist installer_output mkdir installer_output
+          "%ProgramFiles(x86)%\Inno Setup 6\iscc.exe" installer\setup.iss
+
+      # ── 6. Upload — download from the Actions page ───────────────────────────
+      - name: Upload installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: ISO26262Validator-Windows-Installer
+          path: installer_output\*.exe
+          retention-days: 30      # artifact stays downloadable for 30 days
+          if-no-files-found: error

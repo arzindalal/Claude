@@ -79,6 +79,7 @@ def _open_browser() -> None:
 
 def main() -> None:
     import uvicorn
+    from iso26262_validator.api.app import app  # direct import so PyInstaller sees it
 
     print("=" * 60)
     print(" ISO 26262 Validation Tool")
@@ -90,7 +91,7 @@ def main() -> None:
     threading.Thread(target=_open_browser, daemon=True).start()
 
     uvicorn.run(
-        "iso26262_validator.api.app:app",
+        app,
         host=HOST,
         port=PORT,
         log_level="warning",

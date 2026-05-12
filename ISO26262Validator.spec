@@ -10,9 +10,12 @@ Output: dist\ISO26262Validator\ISO26262Validator.exe  (plus supporting files)
 Then compile installer\setup.iss with Inno Setup 6 to produce the installer.
 """
 
-from PyInstaller.utils.hooks import collect_all, collect_data_files
+from PyInstaller.utils.hooks import collect_all, collect_data_files, collect_submodules
 
 block_cipher = None
+
+# ── Collect the application package (uvicorn.run string import won't be seen by PyInstaller) ──
+iso_hidden = collect_submodules("iso26262_validator")
 
 # ── Collect packages that use dynamic/plugin loading ──────────────────────────
 
@@ -59,7 +62,8 @@ all_binaries = (
 )
 
 all_hidden = (
-    chroma_hidden
+    iso_hidden
+    + chroma_hidden
     + st_hidden
     + tokenizers_h
     + hugging_h

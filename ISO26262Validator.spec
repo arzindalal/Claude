@@ -111,6 +111,20 @@ all_hidden = (
         "anthropic",
         "typer",
         "click",
+        # Python 3.14 built-ins that PyInstaller misses
+        "unicodedata",
+        "encodings",
+        "encodings.utf_8",
+        "encodings.ascii",
+        "encodings.latin_1",
+        "encodings.cp1252",
+        "encodings.idna",
+        "_strptime",
+        "decimal",
+        "fractions",
+        "statistics",
+        "zoneinfo",
+        "graphlib",
     ]
 )
 

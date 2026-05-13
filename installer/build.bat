@@ -25,8 +25,8 @@ echo [STEP 1/4] Installing Python dependencies...
 pip install -r iso26262_validator\requirements.txt --quiet
 if errorlevel 1 ( echo [ERROR] pip install failed & pause & exit /b 1 )
 
-echo [STEP 2/4] Installing PyInstaller...
-pip install pyinstaller --quiet
+echo [STEP 2/4] Installing PyInstaller (latest)...
+pip install "pyinstaller>=6.11" --upgrade --quiet
 if errorlevel 1 ( echo [ERROR] PyInstaller install failed & pause & exit /b 1 )
 
 :: ── PyInstaller build ─────────────────────────────────────────────────────────

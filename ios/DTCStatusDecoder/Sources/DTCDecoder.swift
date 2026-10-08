@@ -161,6 +161,68 @@ enum DTCDecoder {
             return tags.joined(separator: " · ")
         }
     }
+
+    static let plain = ["active now", "failed this cycle", "pending", "confirmed",
+                        "not tested since clear", "failed since last clear", "not tested this cycle", "lamp on"]
+
+    private static func list(_ a: [String], _ conj: String) -> String {
+        a.count < 2 ? a.joined() : a.dropLast().joined(separator: ", ") + " \(conj) " + a.last!
+    }
+
+    /// One plain-English sentence for a DTC's actual status byte.
+    static func statusSentence(_ v: UInt8) -> String {
+        func s(_ i: Int) -> Bool { v & (1 << UInt8(i)) != 0 }
+        let main: String
+        if s(0) { main = "The fault is present right now" }
+        else if s(3) { main = "The fault is not present now, but is stored as confirmed from earlier" }
+        else if s(2) { main = "The fault was seen recently but is not confirmed yet" }
+        else if s(5) { main = "The fault occurred since the last clear but is passing now" }
+        else if s(4) { main = "The test hasn't run since codes were cleared, so the state is unknown" }
+        else { return s(6) ? "No fault recorded, but the test hasn't run yet this cycle." : "No fault recorded, and the test has completed." }
+        var extra: [String] = []
+        if s(0) { extra.append(s(3) ? "confirmed in memory" : "not confirmed yet") }
+        if !s(0) && s(1) { extra.append("it failed earlier this cycle") }
+        if s(7) { extra.append("the warning lamp is on") }
+        if !s(4) && s(6) { extra.append("this cycle's test hasn't run yet") }
+        let tail = extra.count == 1 ? " and " + extra[0] : extra.isEmpty ? "" : ", " + list(extra, "and")
+        return main + tail + "."
+    }
+
+    /// One sentence for the overall picture: the whole frame if one was entered, else the byte.
+    static func overall(bytes: [UInt8], analysis a: Analysis, mask: UInt8, mode: Mode) -> String {
+        if bytes.count > 1 {
+            if bytes[0] == 0x7F { return "The ECU rejected the request (NRC 0x\((bytes.count > 2 ? bytes[2] : 0).hex))." }
+            if bytes[0] == 0x59, [0x01, 0x11, 0x12].contains(bytes[1]), bytes.count >= 6 {
+                return "The ECU has \(Int(bytes[4]) << 8 | Int(bytes[5])) DTC(s) matching the requested mask."
+            }
+            if bytes[0] == 0x59, a.error == nil {
+                let n = a.records.count
+                if n == 0 { return "The ECU reports no DTCs matching the requested mask." }
+                let act = a.records.filter { $0.status & 0x01 != 0 }
+                let stored = a.records.filter { $0.status & 0x01 == 0 && $0.status & 0x08 != 0 }
+                let pend = a.records.filter { $0.status & 0x09 == 0 && $0.status & 0x04 != 0 }
+                let other = n - act.count - stored.count - pend.count
+                var parts: [String] = []
+                if !act.isEmpty { parts.append("\(act.count) active now (\(act.map(\.sae).joined(separator: ", ")))") }
+                if !stored.isEmpty { parts.append("\(stored.count) stored but not active") }
+                if !pend.isEmpty { parts.append("\(pend.count) pending") }
+                if other > 0 { parts.append("\(other) passing now") }
+                return "The ECU reports \(n) DTC\(n > 1 ? "s" : ""): \(list(parts, "and"))." + (act.isEmpty ? " Nothing is failing right now." : "")
+            }
+            if a.mask == nil { return a.error ?? a.explanation }
+        }
+        switch mode {
+        case .request:
+            guard mask != 0 else { return "This request selects nothing, so the ECU will return no DTCs." }
+            let what = list(bits.filter { mask & $0.value != 0 }.map { plain[$0.id] }, "or")
+            let counting = bytes.count > 1 && [0x01, 0x11, 0x12].contains(bytes[1] & 0x7F)
+            return counting ? "You're asking the ECU how many DTCs are \(what)." : "You're asking the ECU for every DTC that is \(what)."
+        case .availability:
+            return "The ECU supports \(setBits(mask).count) of 8 status bits: \(setBits(mask).joined(separator: ", "))."
+        case .status:
+            return statusSentence(mask)
+        }
+    }
 }
 
 struct ParseError: Error { let message: String; init(_ m: String) { message = m } }

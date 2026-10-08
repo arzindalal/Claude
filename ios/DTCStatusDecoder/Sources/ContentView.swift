@@ -6,6 +6,7 @@ struct ContentView: View {
     @State private var mode: DTCDecoder.Mode = .request
     @State private var analysis = DTCDecoder.Analysis()
     @State private var parseError: String?
+    @State private var bytes: [UInt8] = []
 
     private let examples = ["19 02 2F", "19 02 08", "59 02 FF 01 23 45 2F C1 00 87 08", "2F", "AF"]
 
@@ -32,6 +33,11 @@ struct ContentView: View {
                     if !analysis.explanation.isEmpty {
                         Text(analysis.explanation).font(.callout).foregroundStyle(.secondary)
                     }
+                }
+
+                Section("Overall") {
+                    Text(DTCDecoder.overall(bytes: bytes, analysis: analysis, mask: mask, mode: mode))
+                        .font(.headline)
                 }
 
                 Section {
@@ -82,6 +88,7 @@ struct ContentView: View {
                     Section {
                         ForEach(analysis.records) { r in
                             Button {
+                                bytes = [r.status]
                                 mask = r.status
                                 mode = .status
                             } label: {
@@ -113,9 +120,10 @@ struct ContentView: View {
     private func run() {
         analysis = DTCDecoder.Analysis()
         switch DTCDecoder.parseHex(input) {
-        case .failure(let e): parseError = e.message
-        case .success(let bytes):
+        case .failure(let e): parseError = e.message; bytes = []
+        case .success(let parsed):
             parseError = nil
+            bytes = parsed
             analysis = DTCDecoder.analyze(bytes)
             if let m = analysis.mask {
                 mask = m

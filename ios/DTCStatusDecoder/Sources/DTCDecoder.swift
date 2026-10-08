@@ -138,29 +138,27 @@ enum DTCDecoder {
         bits.filter { v & $0.value != 0 }.map(\.abbr)
     }
 
-    static func interpret(_ v: UInt8, mode: Mode) -> [String] {
+    /// One-line meaning of a byte in the given reading mode.
+    static func brief(_ v: UInt8, mode: Mode) -> String {
         func s(_ i: Int) -> Bool { v & (1 << UInt8(i)) != 0 }
         switch mode {
         case .request:
-            if v == 0 { return ["0x00 selects no bits, so the ECU reports no DTCs."] }
-            var out = ["Matches a DTC if ANY of \(setBits(v).joined(separator: ", ")) is 1 (logical OR, not AND)."]
-            if v == 0xFF { out.append("0xFF effectively reports all stored DTCs.") }
-            if v == 0x08 { out.append("0x08 is the classic 'confirmed DTCs only' query.") }
-            out.append("The ECU first ANDs this with its DTCStatusAvailabilityMask.")
-            return out
+            return v == 0 ? "Selects nothing: no DTCs reported"
+                : "Reports DTCs with ANY of: \(setBits(v).joined(separator: ", "))"
         case .availability:
-            return ["ECU supports: \(setBits(v).joined(separator: ", ")). Unsupported bits always read 0."]
+            return "ECU supports: \(setBits(v).joined(separator: ", "))"
         case .status:
-            var out: [String] = []
-            if s(0) { out.append("Active: fault present right now.") }
-            else if s(3) { out.append("Historic: confirmed earlier, not failing on the latest test.") }
-            else if s(2) { out.append("Pending: failed recently, not yet confirmed.") }
-            else if s(5) { out.append("Failed at some point since last clear, now passing.") }
-            else { out.append("No failure indicated.") }
-            if s(7) { out.append("Warning lamp requested.") }
-            if s(4) { out.append("Test not completed since last clear, so TF = 0 doesn't prove the fault is gone.") }
-            else if s(6) { out.append("Test not completed this cycle yet.") }
-            return out
+            let failed = s(0) || s(2) || s(3) || s(5)
+            let state = s(0) ? "Active now" : s(3) ? "Stored, not active" : s(2) ? "Pending"
+                : s(5) ? "Failed earlier, passing now" : s(4) ? "Not tested since clear" : "No fault"
+            var tags = [state]
+            if s(0) && s(3) { tags.append("Confirmed") }
+            if s(2) && (s(0) || s(3)) { tags.append("Pending") }
+            if !s(0) && s(1) { tags.append("failed earlier this cycle") }
+            if s(7) { tags.append("Lamp ON") }
+            if failed && s(4) { tags.append("test not run since clear") }
+            else if s(6) && !s(4) { tags.append("test not run this cycle") }
+            return tags.joined(separator: " · ")
         }
     }
 }

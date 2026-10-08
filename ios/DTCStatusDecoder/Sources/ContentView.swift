@@ -40,6 +40,8 @@ struct ContentView: View {
                         Spacer()
                         Text(binary(mask)).font(.system(.body, design: .monospaced)).foregroundStyle(.secondary)
                     }
+                    Text(DTCDecoder.brief(mask, mode: mode))
+                        .font(.headline)
                     Picker("Read as", selection: $mode) {
                         ForEach(DTCDecoder.Mode.allCases) { Text($0.rawValue).tag($0) }
                     }
@@ -75,9 +77,6 @@ struct ContentView: View {
                     Text("Tap a bit to toggle it.")
                 }
 
-                Section("Meaning") {
-                    ForEach(DTCDecoder.interpret(mask, mode: mode), id: \.self) { Text($0) }
-                }
 
                 if !analysis.records.isEmpty {
                     Section {
@@ -92,6 +91,7 @@ struct ContentView: View {
                                         Spacer()
                                         Text("0x\(r.status.hex)").font(.body.monospaced().bold())
                                     }
+                                    Text(DTCDecoder.brief(r.status, mode: .status)).font(.subheadline)
                                     Text("\(r.sae)  ·  \(DTCDecoder.setBits(r.status).joined(separator: " "))")
                                         .font(.caption.monospaced()).foregroundStyle(.secondary)
                                 }
@@ -119,7 +119,7 @@ struct ContentView: View {
             analysis = DTCDecoder.analyze(bytes)
             if let m = analysis.mask {
                 mask = m
-                if bytes.count > 1 { mode = analysis.mode }
+                mode = bytes.count > 1 ? analysis.mode : .status
             }
         }
     }

@@ -13,7 +13,7 @@ Requires a Mac with Xcode 15+.
 Option A (XcodeGen):
 ```
 brew install xcodegen
-cd ios/DTCStatusDecoder && xcodegen
+cd dtc-status-decoder/ios && xcodegen
 open DTCStatusDecoder.xcodeproj
 ```
 

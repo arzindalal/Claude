@@ -1,0 +1,412 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>DTC Status Decoder</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="DTC Status">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Semi+Condensed:wght@600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: one narrow column like a scan-tool screen — input, bit register, decoded rows, frame breakdown */
+:root {
+  --bg: #eef1f2;
+  --panel: #ffffff;
+  --fg: #172126;
+  --muted: #5b6a71;
+  --line: #d3dadd;
+  --accent: #c77700;        /* amber warning-lamp */
+  --accent-ink: #ffffff;
+  --on: #0d7a5f;            /* bit set */
+  --on-bg: #dcf1ea;
+  --off-bg: #f3f5f6;
+  --err: #b3261e;
+  --f-display: "Barlow Semi Condensed", "Arial Narrow", system-ui, sans-serif;
+  --f-body: "Barlow", system-ui, -apple-system, sans-serif;
+  --f-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0f1518; --panel: #172024; --fg: #e4ebee; --muted: #93a3aa; --line: #2b383e;
+  --accent: #f0a330; --accent-ink: #1a1203; --on: #4fd1a5; --on-bg: #143229; --off-bg: #1c262b; --err: #ff8a80;
+  color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #0f1518; --panel: #172024; --fg: #e4ebee; --muted: #93a3aa; --line: #2b383e;
+  --accent: #f0a330; --accent-ink: #1a1203; --on: #4fd1a5; --on-bg: #143229; --off-bg: #1c262b; --err: #ff8a80;
+  color-scheme: dark }
+
+* { box-sizing: border-box }
+body { background: var(--bg); color: var(--fg); font-family: var(--f-body); font-size: 15px; line-height: 1.45; padding: 20px 16px 40px; }
+.wrap { max-width: 640px; margin: 0 auto; display: flex; flex-direction: column; gap: 18px; }
+h1 { font-family: var(--f-display); font-size: 28px; font-weight: 700; margin: 0; letter-spacing: .01em; text-wrap: balance }
+.sub { color: var(--muted); margin: 2px 0 0; }
+.label { font-family: var(--f-display); font-weight: 600; font-size: 12px; letter-spacing: .09em; text-transform: uppercase; color: var(--muted); margin: 0 0 8px; }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px; min-width: 0 }
+
+#hexIn { width: 100%; min-width: 0; font-family: var(--f-mono); font-size: 20px; padding: 12px 14px; border-radius: 8px; border: 1.5px solid var(--line); background: var(--bg); color: var(--fg); letter-spacing: .04em; }
+#hexIn:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 25%, transparent); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px }
+.chip { font-family: var(--f-mono); font-size: 12px; border: 1px solid var(--line); background: var(--off-bg); color: var(--fg); padding: 5px 9px; border-radius: 999px; cursor: pointer; }
+.chip:hover, .chip:focus-visible { border-color: var(--accent); outline: none }
+.msg { margin-top: 10px; font-size: 14px; color: var(--muted) }
+.msg.err { color: var(--err) }
+
+/* frame breakdown */
+.frame { display: flex; flex-wrap: wrap; gap: 6px; }
+.byte { flex: 0 0 auto; display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 44px; padding: 6px 8px; border-radius: 6px; background: var(--off-bg); border: 1px solid var(--line); }
+.byte b { font-family: var(--f-mono); font-size: 16px; font-weight: 600 }
+.byte span { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; text-align: center }
+.byte.mask { background: var(--accent); border-color: var(--accent); }
+.byte.mask b, .byte.mask span { color: var(--accent-ink) }
+.explain { margin: 10px 0 0; font-size: 14px }
+
+/* the status byte register */
+.mask-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap }
+.big { font-family: var(--f-mono); font-size: 34px; font-weight: 600; }
+.bin { font-family: var(--f-mono); color: var(--muted); font-size: 15px; letter-spacing: .12em }
+.ctx { font-size: 13px; color: var(--muted) }
+.seg { display: flex; flex-wrap: wrap; max-width: 100%; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; margin-top: 10px }
+.seg button { flex: 1 1 auto; font: 600 13px var(--f-body); border: 0; background: transparent; color: var(--muted); padding: 7px 12px; cursor: pointer }
+.seg button[aria-pressed="true"] { background: var(--fg); color: var(--bg) }
+.seg button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px }
+
+.bits { list-style: none; margin: 12px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px }
+.bit { display: grid; grid-template-columns: 40px minmax(0, 1fr) auto; gap: 10px; align-items: start; padding: 10px; border-radius: 8px; background: var(--off-bg); border: 1px solid transparent; cursor: pointer; }
+.bit:focus-visible { outline: 2px solid var(--accent) }
+.bit.on { background: var(--on-bg); border-color: color-mix(in srgb, var(--on) 40%, transparent) }
+.bit .n { font-family: var(--f-mono); font-size: 12px; color: var(--muted); line-height: 1.3 }
+.bit .n strong { display: block; font-size: 15px; color: var(--fg) }
+.bit .t { min-width: 0 }
+.bit .name { font-weight: 600; overflow-wrap: break-word; display: block }
+.bit .abbr { font-family: var(--f-mono); font-size: 12px; color: var(--muted); display: block }
+.bit .d { font-size: 13.5px; color: var(--muted); margin-top: 2px }
+.pill { font: 600 12px var(--f-mono); padding: 3px 8px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); white-space: nowrap }
+.bit.on .pill { background: var(--on); border-color: var(--on); color: var(--bg) }
+
+.overall { margin: 0; font: 600 18px/1.4 var(--f-body); text-wrap: pretty }
+.verdict { margin: 10px 0 0; font: 600 19px/1.3 var(--f-display); color: var(--fg); padding: 10px 12px; border-left: 4px solid var(--accent); background: var(--off-bg); border-radius: 0 8px 8px 0 }
+
+/* DTC records */
+.tblwrap { overflow-x: auto }
+table { border-collapse: collapse; width: 100%; font-size: 13.5px; font-variant-numeric: tabular-nums }
+th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--line); vertical-align: top }
+th { font: 600 11px var(--f-display); letter-spacing: .08em; text-transform: uppercase; color: var(--muted) }
+td.m { font-family: var(--f-mono); white-space: nowrap }
+td button { white-space: nowrap }
+td button { font: 600 12px var(--f-mono); border: 1px solid var(--line); background: var(--off-bg); color: var(--fg); padding: 3px 7px; border-radius: 6px; cursor: pointer }
+td button:hover { border-color: var(--accent) }
+.tag { display: inline-block; font-size: 11px; padding: 1px 6px; border-radius: 4px; background: var(--off-bg); border: 1px solid var(--line); margin: 0 3px 3px 0; font-family: var(--f-mono) }
+.note { font-size: 12.5px; color: var(--muted); margin: 8px 0 0 }
+footer { font-size: 12px; color: var(--muted) }
+@media (prefers-reduced-motion: no-preference) { .bit { transition: background .15s, border-color .15s } }
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>DTC Status Decoder</h1>
+    <p class="sub">ISO 14229-1 (UDS) DTC status byte. Paste a mask, a 0x19 request or a 0x59 response.</p>
+  </header>
+
+  <section class="panel" aria-labelledby="inLbl">
+    <p class="label" id="inLbl">Input (hex)</p>
+    <input id="hexIn" inputmode="text" autocapitalize="characters" autocomplete="off" spellcheck="false" value="19 02 2F" aria-label="Hex input">
+    <div class="chips" id="chips"></div>
+    <p class="msg" id="msg" role="status"></p>
+  </section>
+
+  <section class="panel" aria-labelledby="ovLbl">
+    <p class="label" id="ovLbl">Overall</p>
+    <p class="overall" id="overall" aria-live="polite"></p>
+  </section>
+
+  <section class="panel" id="framePanel" hidden>
+    <p class="label">Frame</p>
+    <div class="frame" id="frame"></div>
+    <p class="explain" id="frameExplain"></p>
+  </section>
+
+  <section class="panel" aria-labelledby="maskLbl">
+    <div class="mask-head">
+      <div>
+        <p class="label" id="maskLbl">Status byte</p>
+        <span class="big" id="big">0x2F</span>
+      </div>
+      <span class="bin" id="bin">0010 1111</span>
+    </div>
+    <p class="verdict" id="verdict" aria-live="polite"></p>
+    <div class="seg" role="group" aria-label="How to read this byte">
+      <button id="modeReq" aria-pressed="true">Request filter</button>
+      <button id="modeStat" aria-pressed="false">DTC status</button>
+      <button id="modeAvail" aria-pressed="false">ECU support</button>
+    </div>
+    <p class="ctx" id="ctx"></p>
+    <ul class="bits" id="bits"></ul>
+  </section>
+
+  <section class="panel" id="dtcPanel" hidden>
+    <p class="label">DTC records</p>
+    <div class="tblwrap"><table>
+      <thead><tr><th>DTC (hex)</th><th>SAE style*</th><th>Status</th><th>Meaning</th></tr></thead>
+      <tbody id="dtcBody"></tbody>
+    </table></div>
+    <p class="note">*SAE J2012 / ISO 15031-6 rendering (P/C/B/U + failure type byte). Only meaningful when the ECU's DTCFormatIdentifier is SAE/ISO 15031-6; with ISO 14229-1 format (0x01) the 3 bytes are OEM-defined. Tap a status to decode it.</p>
+  </section>
+
+  <footer>Bit definitions per ISO 14229-1 DTCStatusMask. Tap any bit row to toggle it.</footer>
+</div>
+
+<script>
+const BITS = [
+  { abbr: "TF",     name: "testFailed",
+    d: "The most recent test result is FAILED. Fault is active right now." },
+  { abbr: "TFTOC",  name: "testFailedThisOperationCycle",
+    d: "The test failed at least once during the current operation cycle. Resets at the start of a new cycle." },
+  { abbr: "PDTC",   name: "pendingDTC",
+    d: "Failed during the current or last completed operation cycle. Clears after a full cycle where the test completes with no failure." },
+  { abbr: "CDTC",   name: "confirmedDTC",
+    d: "Fault confirmed and stored in fault memory (debounce/confirmation threshold met). Stays set until aged out or cleared (0x14)." },
+  { abbr: "TNCSLC", name: "testNotCompletedSinceLastClear",
+    d: "1 = the test has NOT run to completion since DTCs were last cleared. (Inverted logic: 0 means it has completed.)" },
+  { abbr: "TFSLC",  name: "testFailedSinceLastClear",
+    d: "The test failed at least once since DTCs were last cleared (latched history, may be reset by aging)." },
+  { abbr: "TNCTOC", name: "testNotCompletedThisOperationCycle",
+    d: "1 = the test has NOT run to completion this operation cycle. (Inverted logic: 0 means it has completed.)" },
+  { abbr: "WIR",    name: "warningIndicatorRequested",
+    d: "The ECU is requesting a warning indicator (e.g. MIL / telltale) for this DTC." },
+];
+
+// sub-function -> index of the DTCStatusMask byte in a 0x19 request
+const REQ_MASK_POS = { 0x01: 2, 0x02: 2, 0x0F: 2, 0x11: 2, 0x12: 2, 0x13: 2, 0x17: 2, 0x42: 3 };
+const SUBFN = {
+  0x01: "reportNumberOfDTCByStatusMask",
+  0x02: "reportDTCByStatusMask",
+  0x0A: "reportSupportedDTC",
+  0x0F: "reportMirrorMemoryDTCByStatusMask",
+  0x11: "reportNumberOfMirrorMemoryDTCByStatusMask",
+  0x12: "reportNumberOfEmissionsOBDDTCByStatusMask",
+  0x13: "reportEmissionsOBDDTCByStatusMask",
+  0x15: "reportDTCWithPermanentStatus",
+  0x17: "reportUserDefMemoryDTCByStatusMask",
+  0x42: "reportWWHOBDDTCByMaskRecord",
+};
+const NRC = { 0x10: "generalReject", 0x11: "serviceNotSupported", 0x12: "subFunctionNotSupported", 0x13: "incorrectMessageLengthOrInvalidFormat", 0x14: "responseTooLong", 0x22: "conditionsNotCorrect", 0x31: "requestOutOfRange", 0x78: "requestCorrectlyReceived-ResponsePending", 0x7E: "subFunctionNotSupportedInActiveSession", 0x7F: "serviceNotSupportedInActiveSession" };
+
+const hx = (n, w = 2) => n.toString(16).toUpperCase().padStart(w, "0");
+const setBits = v => BITS.map((b, i) => (v >> i) & 1 ? b.abbr : null).filter(Boolean);
+
+function parseHex(s) {
+  const clean = s.replace(/0x/gi, "").replace(/[\s,:\-]/g, "");
+  if (!clean) return { err: "Enter a hex value, e.g. 2F or 19 02 2F." };
+  if (!/^[0-9a-fA-F]+$/.test(clean)) return { err: "Only hex digits 0-9 and A-F are allowed." };
+  if (clean.length % 2) return clean.length === 1 ? { bytes: [parseInt(clean, 16)] } : { err: "Odd number of hex digits. Each byte needs 2 digits." };
+  const bytes = [];
+  for (let i = 0; i < clean.length; i += 2) bytes.push(parseInt(clean.slice(i, i + 2), 16));
+  return { bytes };
+}
+
+// SAE J2012 style: bits 15-14 of the first two bytes select P/C/B/U
+function saeCode(hi, mid, lo) {
+  const sys = "PCBU"[hi >> 6];
+  return sys + ((hi >> 4) & 3) + hx(hi & 0x0F, 1) + hx(mid) + "-" + hx(lo);
+}
+
+// Returns { kind, cells:[{v,lbl,mask?}], text, mask, mode, records }
+function analyze(bytes) {
+  const b = bytes;
+  if (b.length === 1) return { kind: "byte", mask: b[0], mode: null, text: "" };
+
+  const cells = b.map(v => ({ v, lbl: "" }));
+  if (b[0] === 0x19) {
+    cells[0].lbl = "SID ReadDTCInfo";
+    const sf = b[1] & 0x7F;
+    if (b.length > 1) cells[1].lbl = "Sub-fn" + (b[1] & 0x80 ? " +SPRMIB" : "");
+    const pos = REQ_MASK_POS[sf];
+    const name = SUBFN[sf] || "sub-function 0x" + hx(sf);
+    if (pos === undefined) return { kind: "frame", cells, text: `0x19 ${hx(sf)} = ${name}. This sub-function has no DTCStatusMask byte.`, mask: null };
+    if (sf === 0x42) { if (cells[2]) cells[2].lbl = "Func group"; if (cells[4]) cells[4].lbl = "Severity mask"; }
+    if (sf === 0x17 && cells[3]) cells[3].lbl = "Memory sel";
+    if (b.length <= pos) return { kind: "frame", cells, text: `0x19 ${hx(sf)} = ${name}. The status mask byte is missing.`, mask: null, err: true };
+    cells[pos].lbl = "Status mask"; cells[pos].mask = true;
+    return { kind: "frame", cells, mask: b[pos], mode: "req",
+      text: `Service 0x19 ReadDTCInformation, sub-function 0x${hx(sf)} ${name}. Byte 0x${hx(b[pos])} is the DTCStatusMask: the ECU returns every DTC whose status has ANY of the selected bits set, i.e. (statusOfDTC & 0x${hx(b[pos])} & availabilityMask) ≠ 0.` };
+  }
+  if (b[0] === 0x7F) {
+    cells[0].lbl = "Neg resp"; if (cells[1]) cells[1].lbl = "Req SID"; if (cells[2]) cells[2].lbl = "NRC";
+    return { kind: "frame", cells, mask: null, text: `Negative response to service 0x${hx(b[1] ?? 0)}: NRC 0x${hx(b[2] ?? 0)} ${NRC[b[2]] || ""}.` };
+  }
+  if (b[0] === 0x59) {
+    cells[0].lbl = "Pos resp 0x19";
+    const sf = b[1]; if (cells[1]) cells[1].lbl = "Sub-fn";
+    const name = SUBFN[sf] || "sub-function 0x" + hx(sf ?? 0);
+    let p = 2;
+    if (sf === 0x17) { if (cells[2]) cells[2].lbl = "Memory sel"; p = 3; }
+    if (b.length <= p) return { kind: "frame", cells, mask: null, text: `Positive response, ${name}. Too short to contain the availability mask.`, err: true };
+    cells[p].lbl = "Avail. mask"; cells[p].mask = true;
+    const avail = b[p];
+    if ([0x01, 0x11, 0x12].includes(sf)) {
+      if (cells[p + 1]) cells[p + 1].lbl = "Format ID";
+      if (cells[p + 2]) cells[p + 2].lbl = "Count hi";
+      if (cells[p + 3]) cells[p + 3].lbl = "Count lo";
+      const cnt = b.length >= p + 4 ? (b[p + 2] << 8) | b[p + 3] : null;
+      const fmt = { 0: "SAE J2012-DA / ISO 15031-6", 1: "ISO 14229-1", 2: "SAE J1939-73", 3: "ISO 11992-4", 4: "SAE J2012-DA WWH-OBD" }[b[p + 1]];
+      return { kind: "frame", cells, mask: avail, mode: "avail",
+        text: `Positive response, ${name}. Availability mask 0x${hx(avail)}` + (fmt ? `, DTC format: ${fmt}` : "") + (cnt !== null ? `, matching DTC count: ${cnt}.` : ".") };
+    }
+    const recs = [];
+    let i = p + 1;
+    while (i + 3 < b.length) {
+      recs.push({ dtc: [b[i], b[i + 1], b[i + 2]], st: b[i + 3] });
+      cells[i].lbl = cells[i + 1].lbl = cells[i + 2].lbl = "DTC " + recs.length; cells[i + 3].lbl = "Status " + recs.length;
+      i += 4;
+    }
+    const leftover = b.length - i;
+    return { kind: "frame", cells, mask: avail, mode: "avail", records: recs,
+      text: `Positive response, ${name}. First byte after the sub-function is the DTCStatusAvailabilityMask 0x${hx(avail)}: the status bits this ECU supports. Then ${recs.length} DTC record(s) of 3 DTC bytes + 1 status byte.` + (leftover ? ` ${leftover} trailing byte(s) don't form a full record.` : "") };
+  }
+  return { kind: "frame", cells, mask: null, text: "Not a 0x19 request, 0x59 response or 0x7F negative response. Enter one byte to decode a status mask on its own.", err: true };
+}
+
+/* ---------- UI ---------- */
+const $ = id => document.getElementById(id);
+let mask = 0x2F, mode = "req", lastAnalysis = null;
+
+const EXAMPLES = ["19 02 2F", "19 02 FF", "19 02 08", "59 02 FF 01 23 45 2F C1 00 87 08 9A 11 00 24", "59 01 FF 01 00 03", "2F", "08", "09", "24", "AF", "50"];
+$("chips").innerHTML = EXAMPLES.map(e => `<button class="chip" data-v="${e}">${e}</button>`).join("");
+$("chips").addEventListener("click", e => { const v = e.target.dataset?.v; if (v) { $("hexIn").value = v; run(); } });
+
+function setMode(m) {
+  mode = m;
+  $("modeReq").setAttribute("aria-pressed", m === "req");
+  $("modeStat").setAttribute("aria-pressed", m === "stat");
+  $("modeAvail").setAttribute("aria-pressed", m === "avail");
+  renderMask();
+}
+$("modeReq").onclick = () => setMode("req");
+$("modeStat").onclick = () => setMode("stat");
+$("modeAvail").onclick = () => setMode("avail");
+
+// One-line meaning of a byte, in the current reading mode
+function brief(v, m = mode) {
+  const s = i => (v >> i) & 1;
+  if (m === "req") return v ? `Reports DTCs with ANY of: ${setBits(v).join(", ")}` : "Selects nothing: no DTCs reported";
+  if (m === "avail") return `ECU supports: ${setBits(v).join(", ") || "no status bits"}`;
+  const failed = s(0) || s(2) || s(3) || s(5);
+  let state = s(0) ? "Active now" : s(3) ? "Stored, not active" : s(2) ? "Pending" : s(5) ? "Failed earlier, passing now"
+    : s(4) ? "Not tested since clear" : "No fault";
+  const tags = [];
+  if (s(0) && s(3)) tags.push("Confirmed");
+  if (s(2) && (s(0) || s(3))) tags.push("Pending");
+  if (!s(0) && s(1)) tags.push("failed earlier this cycle");
+  if (s(7)) tags.push("Lamp ON");
+  if (failed && s(4)) tags.push("test not run since clear");
+  else if (s(6) && !s(4)) tags.push("test not run this cycle");
+  return [state, ...tags].join(" · ");
+}
+
+const PLAIN = ["active now", "failed this cycle", "pending", "confirmed", "not tested since clear", "failed since last clear", "not tested this cycle", "lamp on"];
+const orList = a => a.length < 2 ? a.join("") : a.slice(0, -1).join(", ") + " or " + a[a.length - 1];
+const andList = a => a.length < 2 ? a.join("") : a.slice(0, -1).join(", ") + " and " + a[a.length - 1];
+
+function statusSentence(v) {
+  const s = i => (v >> i) & 1, extra = [];
+  let main;
+  if (s(0)) main = "The fault is present right now";
+  else if (s(3)) main = "The fault is not present now, but is stored as confirmed from earlier";
+  else if (s(2)) main = "The fault was seen recently but is not confirmed yet";
+  else if (s(5)) main = "The fault occurred since the last clear but is passing now";
+  else if (s(4)) main = "The test hasn't run since codes were cleared, so the state is unknown";
+  else return s(6) ? "No fault recorded, but the test hasn't run yet this cycle." : "No fault recorded, and the test has completed.";
+  if (s(0)) extra.push(s(3) ? "confirmed in memory" : "not confirmed yet");
+  if (!s(0) && s(1)) extra.push("it failed earlier this cycle");
+  if (s(7)) extra.push("the warning lamp is on");
+  if (!s(4) && s(6) && (s(0) || s(3) || s(2) || s(5))) extra.push("this cycle's test hasn't run yet");
+  return main + (extra.length === 1 ? " and " + extra[0] : extra.length ? ", " + andList(extra) : "") + ".";
+}
+
+function overallSentence() {
+  const a = lastAnalysis;
+  if (a && a.kind === "frame") {
+    const b = a.cells.map(c => c.v);
+    if (b[0] === 0x7F) return `The ECU rejected the request: ${NRC[b[2]] || "NRC 0x" + hx(b[2] ?? 0)}.`;
+    if (b[0] === 0x59 && a.records) {
+      const n = a.records.length;
+      if (!n) return "The ECU reports no DTCs matching the requested mask.";
+      const act = a.records.filter(r => r.st & 1), stored = a.records.filter(r => !(r.st & 1) && (r.st & 8)), pend = a.records.filter(r => !(r.st & 9) && (r.st & 4));
+      const other = n - act.length - stored.length - pend.length, parts = [];
+      if (act.length) parts.push(`${act.length} active now (${act.map(r => saeCode(...r.dtc)).join(", ")})`);
+      if (stored.length) parts.push(`${stored.length} stored but not active`);
+      if (pend.length) parts.push(`${pend.length} pending`);
+      if (other) parts.push(`${other} passing now`);
+      return `The ECU reports ${n} DTC${n > 1 ? "s" : ""}: ${andList(parts)}.` + (act.length ? "" : " Nothing is failing right now.");
+    }
+    if (b[0] === 0x59 && [0x01, 0x11, 0x12].includes(b[1]) && b.length >= 6)
+      return `The ECU has ${(b[4] << 8) | b[5]} DTC(s) matching the requested mask.`;
+    if (b[0] === 0x19 && mode === "req" && a.mask !== null) {
+      const sf = b[1] & 0x7F;
+      if (!mask) return "This request selects no status bits, so the ECU will return nothing.";
+      const what = orList(PLAIN.filter((_, i) => (mask >> i) & 1));
+      const verb = [0x01, 0x11, 0x12].includes(sf) ? "how many DTCs are" : "for every DTC that is";
+      const mem = sf === 0x0F || sf === 0x11 ? " in mirror memory" : sf === 0x12 || sf === 0x13 ? " (emissions-related)" : sf === 0x17 ? " in user-defined memory" : "";
+      return `You're asking the ECU ${verb} ${what}${mem}.`;
+    }
+    if (a.mask == null) return a.text;
+  }
+  if (mode === "req") return mask ? `As a request, this asks for every DTC that is ${orList(PLAIN.filter((_, i) => (mask >> i) & 1))}.` : "As a request, this selects nothing.";
+  if (mode === "avail") return `The ECU supports ${setBits(mask).length} of 8 status bits: ${setBits(mask).join(", ") || "none"}.`;
+  return statusSentence(mask);
+}
+
+function renderMask() {
+  $("overall").textContent = overallSentence();
+  $("big").textContent = "0x" + hx(mask);
+  const bin = mask.toString(2).padStart(8, "0");
+  $("bin").textContent = bin.slice(0, 4) + " " + bin.slice(4);
+  $("ctx").textContent = mode === "req"
+    ? "Read as a request filter: which status bits you are asking about."
+    : mode === "avail" ? "Read as the ECU's availability mask: which status bits it supports."
+    : "Read as a DTC's actual status: what is true for that DTC right now.";
+  $("bits").innerHTML = BITS.map((b, i) => {
+    const on = (mask >> i) & 1;
+    return `<li class="bit ${on ? "on" : ""}" data-i="${i}" tabindex="0" role="switch" aria-checked="${!!on}">
+      <div class="n">bit<strong>${i}</strong>0x${hx(1 << i)}</div>
+      <div class="t"><span class="name">${b.name.replace(/([A-Z])/g, "<wbr>$1")}</span><span class="abbr">${b.abbr}</span><div class="d">${b.d}</div></div>
+      <span class="pill">${on ? "1" : "0"}</span></li>`;
+  }).reverse().join("");
+  $("verdict").textContent = brief(mask);
+}
+function toggle(i) { mask ^= 1 << i; renderMask(); }
+$("bits").addEventListener("click", e => { const li = e.target.closest(".bit"); if (li) toggle(+li.dataset.i); });
+$("bits").addEventListener("keydown", e => { if ((e.key === " " || e.key === "Enter") && e.target.classList.contains("bit")) { e.preventDefault(); toggle(+e.target.dataset.i); } });
+
+function run() {
+  const r = parseHex($("hexIn").value);
+  const msg = $("msg");
+  msg.className = "msg"; msg.textContent = "";
+  $("framePanel").hidden = true; $("dtcPanel").hidden = true;
+  if (r.err) { msg.className = "msg err"; msg.textContent = r.err; lastAnalysis = null; $("overall").textContent = "Enter a valid hex value to see what it means."; return; }
+  const a = analyze(r.bytes);
+  lastAnalysis = a;
+  if (a.kind === "byte") {
+    msg.textContent = "Single byte, read as a DTC status. Switch to Request mask if it's from a 0x19 request.";
+    mask = a.mask; setMode("stat"); return;
+  }
+  $("framePanel").hidden = false;
+  $("frame").innerHTML = a.cells.map(c => `<div class="byte ${c.mask ? "mask" : ""}"><b>${hx(c.v)}</b><span>${c.lbl || "&nbsp;"}</span></div>`).join("");
+  $("frameExplain").textContent = a.text;
+  if (a.err) { msg.className = "msg err"; msg.textContent = "Couldn't find a status mask in this frame."; }
+  if (a.mask !== null && a.mask !== undefined) { mask = a.mask; setMode(a.mode); } else renderMask();
+  if (a.records && a.records.length) {
+    $("dtcPanel").hidden = false;
+    $("dtcBody").innerHTML = a.records.map(rc => `<tr>
+      <td class="m">0x${rc.dtc.map(x => hx(x)).join("")}</td>
+      <td class="m">${saeCode(...rc.dtc)}</td>
+      <td><button data-st="${rc.st}">0x${hx(rc.st)}</button></td>
+      <td>${brief(rc.st, "stat")}<br>${setBits(rc.st).map(t => `<span class="tag">${t}</span>`).join("")}</td></tr>`).join("");
+  }
+}
+$("dtcBody").addEventListener("click", e => {
+  const st = e.target.dataset?.st; if (st === undefined) return;
+  mask = +st; lastAnalysis = null; setMode("stat"); $("bits").scrollIntoView({ behavior: "smooth", block: "start" });
+});
+$("hexIn").addEventListener("input", run);
+run();
+</script>

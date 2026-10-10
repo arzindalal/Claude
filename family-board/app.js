@@ -114,7 +114,7 @@
   const isTodo = (i) => i.kind === 'task' || i.kind === 'chore';
   const sortTime = (i) => (i.allDay ? '00:00' : i.time || '99');
 
-  // mode 'board': everything except routine chores; 'routines': routine chores only.
+  // mode 'board': everything, routine steps included; 'routines': routine steps only.
   function itemsFor(key, memberFilter = state.filter, mode = 'board') {
     const dow = parseKey(key).getDay();
     let out = [];
@@ -126,7 +126,7 @@
       })));
     }
     out.push(...state.chores
-      .filter((c) => (!c.start || c.start <= key) && repeatsOn(c, dow) && (mode === 'routines' ? !!c.routine : !c.routine))
+      .filter((c) => (!c.start || c.start <= key) && repeatsOn(c, dow) && (mode !== 'routines' || !!c.routine))
       .map((c) => choreToItem(c, key)));
     return out
       .filter((i) => memberFilter === 'all' || i.memberId === memberFilter)
@@ -335,6 +335,7 @@
       item.time ? el('span', { text: (compact ? '' : '🕒 ') + fmtTime(item.time) }) : null,
       el('span', { class: 'stars', title: `${item.points} stars`, text: '★'.repeat(Math.min(item.points, 5)) }),
       item.kind === 'chore' && !item.routine ? el('span', { title: `Repeats: ${repeatName}`, text: compact ? '🔁' : `🔁 ${repeatName}` }) : null,
+      item.routine ? (() => { const p = PERIODS.find((x) => x[0] === item.routine) || PERIODS[0]; return el('span', { title: `${p[2]} routine`, text: compact ? p[1] : `${p[1]} ${p[2]} routine` }); })() : null,
       who && !compact ? el('span', { text: `${m.emoji} ${m.name}` }) : null);
     node.append(check, itemBody(item, meta));
     return node;

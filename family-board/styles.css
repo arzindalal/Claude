@@ -367,3 +367,7 @@ body.kiosk { padding-bottom: 120px; }
 .scan-lines { display: flex; flex-direction: column; gap: 6px; max-height: 45vh; overflow-y: auto; }
 .scan-line { display: flex; align-items: center; gap: 10px; }
 .scan-line input:not([type=checkbox]) { flex: 1; }
+.scan-text { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.scan-text input { width: 100%; }
+.dup-note { font-size: .8rem; font-weight: 800; color: var(--accent); }
+.scan-line.is-dup .scan-text input { border-color: var(--accent); }

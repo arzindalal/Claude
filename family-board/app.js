@@ -9,6 +9,12 @@
   const VIEWS = ['calendar', 'today', 'routines', 'meals', 'lists', 'rewards'];
   const STORES = [['costco', '🏬', 'Costco', '#E31837'], ['indian', '🌶️', 'Indian store', '#FF9F68'], ['grocery', '🥬', 'Grocery store', '#17A884']];
   const storeOf = (g) => (STORES.some((x) => x[0] === g.store) ? g.store : 'grocery');
+  // "Bananas", "banana", "BANANAS!" all count as the same grocery item.
+  const itemKey = (t) => String(t || '').toLowerCase().replace(/[^a-z0-9\u00C0-\u024F\u0900-\u097F ]+/g, ' ').replace(/\s+/g, ' ').trim()
+    .split(' ').map((w) => (w.length > 3 && /(ies)$/.test(w) ? w.replace(/ies$/, 'y') : w.length > 3 && /(oes|ses|xes|ches|shes)$/.test(w) ? w.replace(/es$/, '') : w.length > 3 && /s$/.test(w) && !/ss$/.test(w) ? w.slice(0, -1) : w)).join(' ');
+  // An item already on the list and not yet bought, if any.
+  const findOnList = (title) => { const k = itemKey(title); return k ? state.groceries.find((g) => !g.done && itemKey(g.title) === k) : null; };
+  const storeName = (id) => (STORES.find((x) => x[0] === id) || STORES[2])[2];
 
   const $ = (s) => document.querySelector(s);
   const params = new URLSearchParams(location.search);
@@ -695,6 +701,8 @@
         e.preventDefault();
         const v = input.value.trim(); if (!v) return;
         input.value = '';
+        const dup = findOnList(v);
+        if (dup && !confirm(`"${dup.title}" is already on the ${storeName(storeOf(dup))} list. Add it again?`)) { input.value = v; input.select(); return; }
         try { await col('groceries').add({ title: v, store: id, done: false, createdAt: Date.now() }); } catch (err) { fail(err); }
         document.getElementById(`listInput-${id}`)?.focus();
       } }, input, el('button', { class: 'btn', type: 'submit', text: 'Add' }));
@@ -770,6 +778,8 @@
     }
     return out;
   }
+  // Items already on the list start unticked, with a note saying where they are.
+  function scanLine(text) { const dup = findOnList(text); return { text, on: !dup, dup }; }
   function drawScanLines() {
     $('#scanLines').replaceChildren(...scan.lines.map((l, i) => {
       const box = el('input', { type: 'checkbox', class: 'shop-box', 'aria-label': 'Include this item' });
@@ -777,8 +787,11 @@
       box.addEventListener('change', () => { l.on = box.checked; scanCount(); });
       const txt = el('input', { maxlength: '80', 'aria-label': `Item ${i + 1}` });
       txt.value = l.text;
-      txt.addEventListener('input', () => { l.text = txt.value; scanCount(); });
-      return el('div', { class: 'scan-line' }, box, txt);
+      const note = el('span', { class: 'dup-note' });
+      const showDup = () => { l.dup = findOnList(l.text); note.textContent = l.dup ? `Already on ${storeName(storeOf(l.dup))} list` : ''; note.hidden = !l.dup; };
+      txt.addEventListener('input', () => { l.text = txt.value; showDup(); scanCount(); });
+      showDup();
+      return el('div', { class: 'scan-line' + (l.dup ? ' is-dup' : '') }, box, el('div', { class: 'scan-text' }, txt, note));
     }));
     scanCount();
   }
@@ -788,7 +801,7 @@
     $('#scanAdd').disabled = !n || scan.busy;
   }
   function openScanSheet({ lines = [], store: target, image } = {}) {
-    scan.lines = lines.map((text) => ({ text, on: true }));
+    scan.lines = lines.map(scanLine);
     const preferred = target || (STORES.some((x) => x[0] === state.shopAt) ? state.shopAt : 'grocery');
     $('#scanStore').replaceChildren(...STORES.map(([id, e, n]) => el('option', { value: id, text: `${e} ${n}` })));
     $('#scanStore').value = preferred;
@@ -831,9 +844,9 @@
       const { data } = await worker.recognize(canvas);
       const lines = cleanListLines(data.text || '');
       scan.busy = false;
-      scan.lines = lines.map((text) => ({ text, on: true }));
+      scan.lines = lines.map(scanLine);
       scanStatus(lines.length
-        ? `Found ${lines.length} item${lines.length === 1 ? '' : 's'}. Untick anything wrong and fix spelling, then add.`
+        ? `Found ${lines.length} item${lines.length === 1 ? '' : 's'}${scan.lines.some((l) => l.dup) ? `, ${scan.lines.filter((l) => l.dup).length} already on your list (left unticked)` : ''}. Fix anything wrong, then add.`
         : "Couldn't read any items. Try a closer, brighter photo, or type them with “+ Add a line”.");
       drawScanLines();
     } catch (e) {
@@ -843,8 +856,11 @@
     }
   }
   async function addScanned() {
-    const items = scan.lines.filter((l) => l.on && l.text.trim()).map((l) => l.text.trim().slice(0, 80));
-    if (!items.length) return;
+    const chosen = scan.lines.filter((l) => l.on && l.text.trim());
+    if (!chosen.length) return;
+    const again = chosen.filter((l) => findOnList(l.text));
+    if (again.length && !confirm(`${again.map((l) => `"${l.text.trim()}"`).join(', ')} ${again.length === 1 ? 'is' : 'are'} already on the list. Add ${again.length === 1 ? 'it' : 'them'} again?`)) return;
+    const items = chosen.map((l) => l.text.trim().slice(0, 80));
     const target = $('#scanStore').value;
     try {
       const batch = db.batch(); const now = Date.now();

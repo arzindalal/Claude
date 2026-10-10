@@ -360,3 +360,4 @@ body.kiosk { padding-bottom: 120px; }
   .store { padding: 12px 10px; }
 }
 .board-id { margin: -6px 0 0; color: var(--muted); font-size: .8rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.past-toggle { align-self: flex-start; }

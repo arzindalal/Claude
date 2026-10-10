@@ -30,7 +30,7 @@
     calMode: ['week', 'month', 'schedule'].includes(store.get('calMode')) ? store.get('calMode') : 'week',
     routinePeriod: null, activeList: store.get('activeList') || 'groceries',
     shopAt: store.get('shopAt') || 'all',
-    filter: 'all', offset: 0, lastDay: '', redeeming: null, editingGoal: false,
+    filter: 'all', offset: 0, lastDay: '', redeeming: null, editingGoal: false, showPast: false,
   };
   let db = null;
   let unsubs = [];
@@ -426,7 +426,13 @@
     const todayKey = dayKey(today0());
     const end = addDays(start, 6);
     const compact = !matchMedia('(max-width: 1000px)').matches;
-    const days = weekKeys(start).map((key) => {
+    // On phones the days stack, so this week starts at today; earlier days sit behind a button.
+    const allKeys = weekKeys(start);
+    const pastKeys = !compact && state.offset === 0 ? allKeys.filter((k) => k < todayKey) : [];
+    const keys = pastKeys.length && !state.showPast ? allKeys.filter((k) => k >= todayKey) : allKeys;
+    const pastToggle = pastKeys.length ? btn(state.showPast ? 'Hide earlier days' : `Show earlier days (${DOW[parseKey(pastKeys[0]).getDay()]}–${DOW[parseKey(pastKeys[pastKeys.length - 1]).getDay()]})`,
+      () => { state.showPast = !state.showPast; render(); }, 'btn soft small past-toggle') : null;
+    const days = keys.map((key) => {
       const d = parseKey(key);
       const items = itemsFor(key);
       const dinner = (state.meals[key] || {}).dinner;
@@ -442,7 +448,7 @@
     });
     return el('div', { class: 'stack' }, countdownStrip(),
       calendarNav(`${fmtDay(start, { month: 'short', day: 'numeric' })} – ${fmtDay(end, { month: 'short', day: 'numeric' })}`),
-      el('div', { class: 'week' }, days));
+      pastToggle, el('div', { class: 'week' }, days));
   }
 
   function renderMonth() {

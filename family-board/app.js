@@ -545,7 +545,10 @@
     const all = itemsFor(key, 'all', 'routines');
     const label = PERIODS.find((p) => p[0] === period);
     const head = el('div', { class: 'weeknav' },
-      seg(PERIODS.map(([v, e, n]) => [v, `${e} ${n}`]), period, (v) => { state.routinePeriod = v; render(); }, 'Routine time'),
+      seg(PERIODS.map(([v, e, n]) => {
+        const c = all.filter((i) => i.routine === v && (state.filter === 'all' || i.memberId === state.filter)).length;
+        return [v, `${e} ${n}${c ? ` (${c})` : ''}`];
+      }), period, (v) => { state.routinePeriod = v; render(); }, 'Routine time'),
       el('h2', { text: `${label[2]} routine` }),
       btn('+ Add a routine step', () => openTaskSheet(key, { routine: period })));
     if (!state.chores.some((c) => c.routine)) {
@@ -555,6 +558,10 @@
         el('div', {}, btn(`Add a ${label[2].toLowerCase()} routine step`, () => openTaskSheet(key, { routine: period }), 'btn'))));
     }
     const cols = people.map((m) => personColumn(m, all.filter((i) => i.memberId === m.id && i.routine === period), 'No steps for this time', 'Routine done! 🎉'));
+    const loose = all.filter((i) => i.routine === period && !memberById(i.memberId));
+    if (loose.length && state.filter === 'all') {
+      cols.push(el('section', { class: 'person-col' }, el('div', { class: 'person-head' }, el('span', { class: 'avatar lg', text: '🙌' }), el('h3', { text: 'Anyone' })), ...loose.map((i) => itemCard(i))));
+    }
     return el('div', { class: 'stack' }, head, el('div', { class: 'today-grid' }, cols));
   }
 
@@ -915,6 +922,8 @@
     const asTask = (memberId) => ({ ...base, memberId, date, done: false, createdAt: Date.now() });
     const asChore = (memberId) => ({ ...base, memberId, repeat, days, start: date, createdAt: Date.now() });
     const edit = sheetState.edit;
+    // Routine steps belong to someone: an unassigned step would have no column to show in.
+    if (routine && !sheetState.who.length) { toast('Pick who this routine step is for'); $('#tWho').scrollIntoView({ block: 'center' }); return; }
     $('#taskSheet').close();
     try {
       if (edit) {
@@ -931,7 +940,22 @@
         const batch = db.batch();
         who.forEach((memberId) => batch.set((repeat === 'none' ? col('tasks') : col('chores')).doc(), repeat === 'none' ? asTask(memberId) : asChore(memberId)));
         await batch.commit();
-        toast(routine ? 'Routine step added 🌅' : repeat !== 'none' ? 'Repeating item added 🔁' : ev ? 'Event added 📅' : 'Added to the board ✨');
+        // Take the person to where the new item shows up, so nothing seems to vanish.
+        const names = who.map((id) => (memberById(id) || {}).name).filter(Boolean).join(', ') || 'anyone';
+        const todayKey = dayKey(today0());
+        if (routine) {
+          state.view = 'routines'; state.routinePeriod = routine; state.filter = 'all';
+          toast(`Added to ${names}'s ${routine} routine 🌅`);
+        } else if (repeat === 'none' && date !== todayKey) {
+          state.view = 'calendar'; state.calMode = 'week'; state.filter = 'all';
+          state.offset = daysBetween(mondayOf(today0()), mondayOf(parseKey(date))) / 7;
+          toast(`${ev ? 'Event' : 'Chore'} added for ${names} on ${fmtDay(parseKey(date))} 📅`);
+        } else {
+          if (state.view === 'routines') state.view = 'today';
+          toast(repeat !== 'none' ? `Repeating ${ev ? 'event' : 'chore'} added for ${names} 🔁` : ev ? `Event added for ${names} 📅` : `Chore added for ${names} ✨`);
+        }
+        if (!KIOSK) store.set('view', state.view);
+        render();
       }
     } catch (err) { fail(err); }
   }

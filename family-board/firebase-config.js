@@ -8,3 +8,7 @@ window.FIREBASE_CONFIG = {
   messagingSenderId: "429010098169",
   appId: "1:429010098169:web:2fea890aed5f587e9ccf28"
 };
+
+// Google Calendar: the OAuth "Web application" client ID from Google Cloud Console
+// (APIs & Services → Credentials). It is public by design, not a secret. Leave empty to hide the feature.
+window.GOOGLE_CLIENT_ID = "";

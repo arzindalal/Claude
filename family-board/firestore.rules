@@ -10,10 +10,10 @@ service cloud.firestore {
                             && request.resource.data.keys().size() <= 10;
       allow list, delete: if false;
 
-      // Board data: tasks, repeating chores, chore check-offs, meals, groceries.
+      // Board data: tasks, repeating chores, chore check-offs, meals, groceries, imported calendar events.
       match /{coll}/{docId} {
-        allow read, delete: if coll in ['tasks', 'chores', 'completions', 'meals', 'groceries'];
-        allow create, update: if coll in ['tasks', 'chores', 'completions', 'meals', 'groceries']
+        allow read, delete: if coll in ['tasks', 'chores', 'completions', 'meals', 'groceries', 'events'];
+        allow create, update: if coll in ['tasks', 'chores', 'completions', 'meals', 'groceries', 'events']
                               && request.resource.data.keys().size() <= 12
                               && (!('title' in request.resource.data)
                                   || (request.resource.data.title is string

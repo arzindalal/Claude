@@ -31,6 +31,24 @@ A shared weekly board for chores, errands, and events. Phones sync in real time,
    ```
    The CLI prints your site URL, for example `https://your-project.web.app`.
 
+## Google Calendar (optional, about 5 minutes, free)
+
+Each family member connects their own Google Calendar from their own phone with Google's sign-in window. The board gets **read-only** access, never sees passwords, and stores no Google sign-in tokens in the database. Imported events are copied to the family board so every device, including the wall display, shows them.
+
+**How syncing works (no server):** a person's calendar updates when they open the board on their phone. If their Google access is still fresh (about an hour), it syncs automatically; otherwise they tap 🔄 once. Fully automatic background sync would need a small server (Cloud Functions on Firebase's pay-as-you-go plan).
+
+One-time setup in [Google Cloud Console](https://console.cloud.google.com/), with the project **family-board-4d06d** selected:
+1. **Turn on the API:** *APIs & Services → Library →* search "Google Calendar API" → *Enable*.
+2. **Consent screen:** *Google Auth Platform → Branding*: app name "Family Board", your email as support and developer contact. *Audience*: External, Testing. Under *Test users*, add the Gmail address of every family member who will connect a calendar (up to 100).
+3. **Client ID:** *Google Auth Platform → Clients → Create client →* Web application. Under *Authorized JavaScript origins* add:
+   - `https://family-board-4d06d.web.app`
+   - `https://family-board-4d06d.firebaseapp.com`
+4. Copy the **Client ID** (ends in `.apps.googleusercontent.com`) into `GOOGLE_CLIENT_ID` in `firebase-config.js`, then `firebase deploy --only hosting`.
+
+When connecting, Google shows "Google hasn't verified this app". That's expected for a private family app in Testing mode: tap *Continue*. Removing that screen requires Google's app verification.
+
+To connect: ⚙️ → Google Calendar → "I'm Mom: connect" → pick which calendars to show. Everything from those calendars is visible to anyone with the family link, so leave private calendars unticked.
+
 ## Using it
 1. Open the site and tap **Create a new family**.
 2. Tap **Copy share link** and send it to family members. Each person opens it once on their phone.

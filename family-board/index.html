@@ -136,6 +136,22 @@
   .item .meta .stars { color: var(--sun); }
   .item .del { border: 0; background: transparent; color: var(--muted); font-size: 1.1rem; padding: 2px 6px; border-radius: 8px; opacity: .55; }
   .item .del:hover { opacity: 1; }
+  .item.event { background: transparent; border: 1.5px dashed var(--c, var(--line)); border-left: 6px solid var(--c, var(--line)); grid-template-columns: auto minmax(0, 1fr); }
+  .item.event .t { font-weight: 700; }
+  .cal-icon { width: 30px; text-align: center; font-size: 1.15rem; }
+  .item.compact .cal-icon { width: 24px; font-size: .95rem; }
+  body.kiosk .item.event .cal-icon { width: 38px; }
+  .icon-btn { position: relative; }
+  .icon-btn .badge { position: absolute; top: 4px; right: 4px; width: 10px; height: 10px; border-radius: 50%; background: var(--accent); border: 2px solid var(--surface); }
+  @media (prefers-reduced-motion: no-preference) { .icon-btn.spinning .spin { display: inline-block; animation: spin 1s linear infinite; } }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .gcal-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 6px 0; }
+  .gcal-row .n { font-weight: 800; }
+  .gcal-row .s { color: var(--muted); font-size: .85rem; font-weight: 600; }
+  .gcal-row .acts { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+  .cal-choice { display: flex; align-items: center; gap: 10px; padding: 8px 4px; border-bottom: 1px solid var(--line); font-weight: 700; }
+  .cal-choice input { width: 22px; height: 22px; accent-color: var(--accent); }
+  .cal-choice .sw { width: 14px; height: 14px; border-radius: 4px; flex: none; }
   @media (prefers-reduced-motion: no-preference) { .item.pop { animation: pop .45s ease; } }
   @keyframes pop { 0% { transform: scale(1); } 40% { transform: scale(1.05); } 100% { transform: scale(1); } }
 
@@ -256,6 +272,7 @@
     <div class="top-right">
       <span class="star-pill" title="Stars earned this week"><span class="s">★</span><span id="weekStars">0</span> this week</span>
       <span class="clock" id="clock">--:--</span>
+      <button class="icon-btn edit-only" id="syncBtn" type="button" aria-label="Sync my Google Calendar" title="Sync my Google Calendar" hidden><span class="spin" aria-hidden="true">🔄</span></button>
       <button class="icon-btn edit-only" id="settingsBtn" type="button" aria-label="Family settings">⚙️</button>
     </div>
   </header>
@@ -328,6 +345,10 @@
       <div class="emojis" id="sEmojis"></div>
     </form>
     <hr class="divider">
+    <h3>Google Calendar</h3>
+    <p class="muted" style="margin:0" id="gcalIntro">Each person connects their own Google Calendar from their own phone. Events show on everyone's board, including the wall display. The board can only read calendars, never change them, and never sees passwords.</p>
+    <div id="gcalRows"></div>
+    <hr class="divider">
     <h3>Repeating chores</h3>
     <div id="sChores"></div>
     <hr class="divider">
@@ -350,7 +371,17 @@
   </div>
 </dialog>
 
+<dialog id="calSheet" aria-labelledby="calSheetTitle">
+  <div class="sheet">
+    <div class="sheet-head"><h2 id="calSheetTitle">Pick calendars</h2><button type="button" class="icon-btn" data-close aria-label="Close">✕</button></div>
+    <p class="muted" style="margin:0">Events from the calendars you pick will be visible to everyone with the family link. Leave out anything private.</p>
+    <div id="calList"></div>
+    <button id="calImport" class="btn" type="button">Import to the board</button>
+  </div>
+</dialog>
+
 <div id="toast" class="toast" role="status" aria-live="polite"></div>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
 
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
@@ -375,7 +406,7 @@
   const state = {
     familyId: params.get('family') || store.get('familyId'),
     family: { name: '', members: [], reward: null },
-    tasks: [], chores: [], completions: {}, meals: {}, groceries: [],
+    tasks: [], chores: [], completions: {}, meals: {}, groceries: [], events: [],
     view: KIOSK ? 'today' : (store.get('view') || 'week'),
     filter: 'all', offset: 0, lastDay: '',
   };
@@ -456,10 +487,16 @@
         points: Number(c.points) || 1, done: !!(state.completions[cid] && state.completions[cid].done), date: key, repeat: c.repeat,
       };
     });
-    return [...one, ...rec]
+    const cal = state.events.filter((e) => e.date === key).map((e) => ({
+      kind: 'event', id: e.id, title: e.title, memberId: e.memberId, time: e.time || '', endTime: e.endTime || '',
+      allDay: !!e.allDay, points: 0, done: false, date: key,
+    }));
+    const sortTime = (i) => (i.allDay ? '00:00' : i.time || '99');
+    return [...one, ...rec, ...cal]
       .filter((i) => memberFilter === 'all' || i.memberId === memberFilter)
-      .sort((a, b) => (a.done - b.done) || ((a.time || '99') < (b.time || '99') ? -1 : (a.time || '99') > (b.time || '99') ? 1 : 0) || String(a.title).localeCompare(String(b.title)));
+      .sort((a, b) => (a.done - b.done) || (sortTime(a) < sortTime(b) ? -1 : sortTime(a) > sortTime(b) ? 1 : 0) || String(a.title).localeCompare(String(b.title)));
   }
+  const isTodo = (i) => i.kind !== 'event';
 
   // Stars and streaks for the current calendar week (Mon–Sun).
   function scoreboard() {
@@ -539,7 +576,22 @@
   }
 
   // ---------- Rendering ----------
+  function eventCard(item, { compact = false, showWho = true } = {}) {
+    const m = memberById(item.memberId);
+    const who = showWho && m && state.filter === 'all';
+    const when = item.allDay ? 'All day' : fmtTime(item.time) + (item.endTime && !compact ? ` – ${fmtTime(item.endTime)}` : '');
+    const meta = el('div', { class: 'meta' },
+      who && compact ? el('span', { title: m.name, text: m.emoji }) : null,
+      el('span', { text: when }),
+      compact ? null : el('span', { text: 'Google Calendar' }),
+      who && !compact ? el('span', { text: `${m.emoji} ${m.name}` }) : null);
+    return el('div', { class: 'item event' + (compact ? ' compact' : ''), style: `--c:${m ? m.color : 'var(--line)'}`, title: 'From Google Calendar' },
+      el('span', { class: 'cal-icon', 'aria-hidden': 'true', text: '📅' }),
+      el('div', {}, el('div', { class: 't', text: item.title }), meta));
+  }
+
   function itemCard(item, { compact = false, showWho = true } = {}) {
+    if (item.kind === 'event') return eventCard(item, { compact, showWho });
     const m = memberById(item.memberId);
     const repeatName = { daily: 'Daily', weekdays: 'Weekdays', weekly: 'Weekly' }[item.repeat] || '';
     const node = el('div', { class: 'item' + (item.done ? ' done' : ''), style: `--c:${m ? m.color : 'var(--line)'}` });
@@ -581,7 +633,7 @@
     box.hidden = !showChips;
     if (!showChips) return;
     const todayKey = dayKey(today0());
-    const left = (id) => itemsFor(todayKey, id).filter((i) => !i.done).length;
+    const left = (id) => itemsFor(todayKey, id).filter((i) => isTodo(i) && !i.done).length;
     const chip = (id, label, m) => el('button', {
       class: 'chip', type: 'button', 'aria-pressed': String(state.filter === id),
       onclick: () => { state.filter = state.filter === id ? 'all' : id; render(); },
@@ -638,11 +690,12 @@
     const people = state.filter === 'all' ? state.family.members : state.family.members.filter((m) => m.id === state.filter);
     const cols = people.map((m) => {
       const items = itemsFor(key, m.id);
-      const done = items.filter((i) => i.done).length;
+      const todos = items.filter(isTodo);
+      const done = todos.filter((i) => i.done).length;
       return el('section', { class: 'person-col', style: `--c:${m.color}` },
         el('div', { class: 'person-head' }, avatar(m, 'lg'),
-          el('div', {}, el('h3', { text: m.name }), el('div', { class: 'sub', text: items.length ? (done === items.length ? 'All done! 🎉' : `${items.length - done} to go`) : 'Nothing today' })),
-          ring(done, items.length, m.color)),
+          el('div', {}, el('h3', { text: m.name }), el('div', { class: 'sub', text: todos.length ? (done === todos.length ? 'All done! 🎉' : `${todos.length - done} to go`) : items.length ? 'No chores today' : 'Nothing today' })),
+          ring(done, todos.length, m.color)),
         ...(items.length ? items.map((i) => itemCard(i, { showWho: false })) : [el('p', { class: 'free', text: 'Free as a bird 🐦' })]));
     });
     const unassigned = itemsFor(key, 'all').filter((i) => !memberById(i.memberId));
@@ -731,6 +784,7 @@
     state.lastDay = dayKey(today0());
     renderHeader();
     renderPeople();
+    renderSyncBtn();
     $('#fab').hidden = KIOSK || !state.family.members.length || !['week', 'today'].includes(state.view);
     let view;
     if (!state.family.members.length && ['week', 'today', 'stars'].includes(state.view)) view = emptyFamily();
@@ -860,11 +914,248 @@
         el('button', { class: 'btn danger small', type: 'button', text: 'Remove', onclick: () => deleteItem({ kind: 'chore', id: c.id, title: c.title }) }));
     }) : [el('p', { class: 'muted', style: 'margin:0', text: 'None yet. Use + and choose "Repeat" to add one.' })]));
     $('#sCode').textContent = `Family code: ${state.familyId}`;
+    renderGcalRows();
   }
 
   async function copy(text, label) {
     try { await navigator.clipboard.writeText(text); toast(`${label} copied 📋`); }
     catch (_) { prompt('Copy this link:', text); }
+  }
+
+  // ---------- Google Calendar ----------
+  // Each person connects from their own device with Google's sign-in window (OAuth).
+  // The board gets a short-lived, read-only token; no passwords and no refresh tokens are stored.
+  // Imported events are copied into the family's shared "events" collection so every device sees them.
+  const GCAL_SCOPE = 'https://www.googleapis.com/auth/calendar.readonly';
+  const GCAL_API = 'https://www.googleapis.com/calendar/v3';
+  const gcalKey = () => `gcal:${state.familyId}`;
+  const gcalLocal = () => { try { return JSON.parse(store.get(gcalKey()) || 'null'); } catch (_) { return null; } };
+  const setGcalLocal = (v) => (v ? store.set(gcalKey(), JSON.stringify(v)) : store.del(gcalKey()));
+  const tokenCache = {
+    get() { try { const t = JSON.parse(sessionStorage.getItem('gcalToken') || 'null'); return t && t.exp > Date.now() ? t.token : null; } catch (_) { return null; } },
+    set(token, seconds) { try { sessionStorage.setItem('gcalToken', JSON.stringify({ token, exp: Date.now() + (seconds - 60) * 1000 })); } catch (_) {} },
+    clear() { try { sessionStorage.removeItem('gcalToken'); } catch (_) {} },
+  };
+  let syncing = false;
+
+  // Must be called directly from a tap: Google's sign-in opens a pop-up window.
+  function requestGoogleToken(prompt) {
+    return new Promise((resolve, reject) => {
+      const clientId = window.GOOGLE_CLIENT_ID;
+      if (!clientId) return reject(new Error('Google Calendar is not set up for this board yet. See the README.'));
+      if (!(window.google && google.accounts && google.accounts.oauth2)) return reject(new Error('Google sign-in did not load. Check your connection and try again.'));
+      const client = google.accounts.oauth2.initTokenClient({
+        client_id: clientId,
+        scope: GCAL_SCOPE,
+        callback: (resp) => {
+          if (resp.error) return reject(new Error(resp.error === 'access_denied' ? 'Calendar access was not allowed.' : (resp.error_description || resp.error)));
+          if (!google.accounts.oauth2.hasGrantedAllScopes(resp, GCAL_SCOPE)) return reject(new Error('Please tick the calendar box on the Google screen so the board can read events.'));
+          tokenCache.set(resp.access_token, Number(resp.expires_in) || 3600);
+          resolve(resp.access_token);
+        },
+        error_callback: (err) => reject(new Error(err && err.type === 'popup_closed' ? 'The Google window was closed before finishing.' : 'The Google window was blocked. Allow pop-ups for this site and try again.')),
+      });
+      client.requestAccessToken({ prompt });
+    });
+  }
+
+  async function gapi(token, path) {
+    const r = await fetch(GCAL_API + path, { headers: { Authorization: `Bearer ${token}` } });
+    if (r.status === 401) { tokenCache.clear(); const e = new Error('Google sign-in expired. Tap sync to reconnect.'); e.code = 'auth'; throw e; }
+    if (!r.ok) throw new Error(`Google Calendar returned an error (${r.status}). Try again in a minute.`);
+    return r.json();
+  }
+
+  function hashId(s) {
+    let h = 0x811c9dc5;
+    for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193); }
+    return (h >>> 0).toString(36);
+  }
+
+  // Turn Google events into one board entry per day they cover (multi-day events capped at 14 days).
+  function toBoardEvents(items, memberId) {
+    const out = new Map();
+    const hm = (d) => `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    for (const e of items) {
+      if (e.status === 'cancelled' || !e.start) continue;
+      const title = String(e.summary || 'Busy').slice(0, 200);
+      const put = (date, extra) => {
+        const id = `g-${memberId}-${hashId(`${e._cal}|${e.id}|${date}`)}`;
+        out.set(id, { title, date, memberId, source: 'google', allDay: false, time: '', endTime: '', ...extra });
+      };
+      if (e.start.date) {
+        let d = parseKey(e.start.date); const end = parseKey(e.end && e.end.date ? e.end.date : e.start.date);
+        for (let n = 0; (d < end || n === 0) && n < 14; n++, d = addDays(d, 1)) put(dayKey(d), { allDay: true });
+      } else if (e.start.dateTime) {
+        const s = new Date(e.start.dateTime); const en = new Date(e.end && e.end.dateTime ? e.end.dateTime : e.start.dateTime);
+        const sameDay = dayKey(s) === dayKey(en);
+        put(dayKey(s), { time: hm(s), endTime: sameDay ? hm(en) : '' });
+        // Continue overnight or multi-day timed events on the following days as all-day markers.
+        let d = addDays(parseKey(dayKey(s)), 1);
+        for (let n = 0; d < en && n < 13; n++, d = addDays(d, 1)) put(dayKey(d), { allDay: true });
+      }
+    }
+    return out;
+  }
+
+  async function syncCalendar(token, conn, { quiet = false } = {}) {
+    if (syncing) return;
+    syncing = true;
+    $('#syncBtn').classList.add('spinning');
+    try {
+      const from = addDays(today0(), -7), to = addDays(today0(), 60);
+      const items = [];
+      for (const calId of conn.calendars) {
+        let pageToken = '';
+        do {
+          const q = new URLSearchParams({ singleEvents: 'true', orderBy: 'startTime', maxResults: '250', timeMin: from.toISOString(), timeMax: to.toISOString() });
+          if (pageToken) q.set('pageToken', pageToken);
+          const j = await gapi(token, `/calendars/${encodeURIComponent(calId)}/events?${q}`);
+          for (const e of j.items || []) items.push({ ...e, _cal: calId });
+          pageToken = j.nextPageToken || '';
+        } while (pageToken);
+      }
+      const fresh = toBoardEvents(items, conn.memberId);
+      const fromKey = dayKey(from);
+      const mine = state.events.filter((e) => e.memberId === conn.memberId && e.source === 'google');
+      const ops = [];
+      for (const old of mine) if (old.date >= fromKey && !fresh.has(old.id)) ops.push((b) => b.delete(col('events').doc(old.id)));
+      const same = (a, b) => a && ['title', 'date', 'time', 'endTime', 'allDay'].every((k) => (a[k] || '') === (b[k] || ''));
+      for (const [id, data] of fresh) {
+        if (!same(mine.find((x) => x.id === id), data)) ops.push((b) => b.set(col('events').doc(id), { ...data, syncedAt: Date.now() }));
+      }
+      for (let i = 0; i < ops.length; i += 400) {
+        const batch = db.batch();
+        ops.slice(i, i + 400).forEach((op) => op(batch));
+        await batch.commit();
+      }
+      const members = state.family.members.map((m) => (m.id === conn.memberId ? { ...m, calendarSyncedAt: Date.now(), calendarConnected: true } : m));
+      await famRef().update({ members });
+      if (!quiet) toast(`Calendar synced 📅 ${fresh.size} event${fresh.size === 1 ? '' : 's'} on the board`);
+    } catch (e) {
+      if (!quiet || e.code !== 'auth') toast(e.message || 'Calendar sync failed. Try again.');
+      if (e.code !== 'auth') console.error(e);
+    } finally {
+      syncing = false;
+      $('#syncBtn').classList.remove('spinning');
+      renderSyncBtn();
+    }
+  }
+
+  // On open: sync silently if this device still holds a valid token (no pop-up).
+  function autoSyncCalendar() {
+    const conn = gcalLocal();
+    const token = tokenCache.get();
+    renderSyncBtn();
+    if (conn && token) setTimeout(() => syncCalendar(token, conn, { quiet: true }), 1500);
+  }
+
+  async function syncNow() {
+    const conn = gcalLocal();
+    if (!conn) { openSettings(); return; }
+    try {
+      const token = tokenCache.get() || await requestGoogleToken('');
+      await syncCalendar(token, conn);
+    } catch (e) { toast(e.message); }
+  }
+
+  let pendingConnect = null;
+  async function connectCalendar(memberId) {
+    try {
+      const token = await requestGoogleToken('consent');
+      const list = await gapi(token, '/users/me/calendarList?minAccessRole=reader');
+      const cals = (list.items || []).sort((a, b) => (b.primary ? 1 : 0) - (a.primary ? 1 : 0));
+      const prev = gcalLocal();
+      const chosen = new Set(prev && prev.memberId === memberId ? prev.calendars : cals.filter((c) => c.primary).map((c) => c.id));
+      pendingConnect = { token, memberId };
+      $('#calSheetTitle').textContent = `Pick ${memberById(memberId)?.name || 'your'}'s calendars`;
+      $('#calList').replaceChildren(...cals.map((c) => {
+        const box = el('input', { type: 'checkbox', value: c.id, id: 'cal-' + hashId(c.id) });
+        box.checked = chosen.has(c.id);
+        return el('label', { class: 'cal-choice', for: box.id }, box,
+          el('span', { class: 'sw', style: `background:${/^#[0-9a-fA-F]{6}$/.test(c.backgroundColor || '') ? c.backgroundColor : 'var(--line)'}` }),
+          el('span', { text: (c.summaryOverride || c.summary || c.id) + (c.primary ? ' (main)' : '') }));
+      }));
+      $('#settingsSheet').close();
+      $('#calSheet').showModal();
+    } catch (e) { toast(e.message); }
+  }
+
+  async function importChosen() {
+    if (!pendingConnect) return;
+    const calendars = [...document.querySelectorAll('#calList input:checked')].map((x) => x.value);
+    if (!calendars.length) { toast('Pick at least one calendar'); return; }
+    const conn = { memberId: pendingConnect.memberId, calendars };
+    const token = pendingConnect.token;
+    pendingConnect = null;
+    setGcalLocal(conn);
+    $('#calSheet').close();
+    await syncCalendar(token, conn);
+  }
+
+  async function disconnectCalendar(memberId) {
+    const m = memberById(memberId);
+    if (!confirm(`Disconnect ${m ? m.name + "'s" : 'this'} Google Calendar and remove its events from the board?`)) return;
+    try {
+      const mine = state.events.filter((e) => e.memberId === memberId && e.source === 'google');
+      for (let i = 0; i < mine.length; i += 400) {
+        const batch = db.batch();
+        mine.slice(i, i + 400).forEach((e) => batch.delete(col('events').doc(e.id)));
+        await batch.commit();
+      }
+      const conn = gcalLocal();
+      if (conn && conn.memberId === memberId) {
+        const token = tokenCache.get();
+        if (token && window.google && google.accounts && google.accounts.oauth2) google.accounts.oauth2.revoke(token, () => {});
+        tokenCache.clear();
+        setGcalLocal(null);
+      }
+      await saveMembers(state.family.members.map((x) => (x.id === memberId ? { ...x, calendarConnected: false, calendarSyncedAt: null } : x)));
+      toast('Calendar disconnected');
+      renderSyncBtn();
+    } catch (e) { fail(e); }
+  }
+
+  const ago = (t) => {
+    if (!t) return 'never';
+    const mins = Math.round((Date.now() - t) / 60000);
+    if (mins < 1) return 'just now';
+    if (mins < 60) return `${mins} min ago`;
+    const h = Math.round(mins / 60);
+    return h < 48 ? `${h} hr ago` : `${Math.round(h / 24)} days ago`;
+  };
+
+  function renderSyncBtn() {
+    const conn = gcalLocal();
+    const btn = $('#syncBtn');
+    btn.hidden = KIOSK || !conn || !memberById(conn.memberId);
+    if (btn.hidden) return;
+    const m = memberById(conn.memberId);
+    const stale = !m.calendarSyncedAt || Date.now() - m.calendarSyncedAt > 3 * 3600 * 1000;
+    btn.querySelector('.badge')?.remove();
+    if (stale) btn.append(el('span', { class: 'badge', 'aria-hidden': 'true' }));
+    btn.title = `Sync ${m.name}'s Google Calendar (last synced ${ago(m.calendarSyncedAt)})`;
+  }
+
+  function renderGcalRows() {
+    const conn = gcalLocal();
+    const configured = !!window.GOOGLE_CLIENT_ID;
+    $('#gcalRows').replaceChildren(...(!configured
+      ? [el('p', { class: 'error', style: 'margin:0', text: 'Google Calendar is not switched on for this board yet. The board owner needs to add a Google sign-in client ID (see README).' })]
+      : state.family.members.length ? state.family.members.map((m) => {
+        const here = conn && conn.memberId === m.id;
+        const status = m.calendarConnected ? `Connected · synced ${ago(m.calendarSyncedAt)}${here ? ' · this device' : ''}` : 'Not connected';
+        const acts = here
+          ? [el('button', { class: 'btn small', type: 'button', text: 'Sync now', onclick: syncNow }),
+            el('button', { class: 'btn soft small', type: 'button', text: 'Calendars', onclick: () => connectCalendar(m.id) }),
+            el('button', { class: 'btn danger small', type: 'button', text: 'Disconnect', onclick: () => disconnectCalendar(m.id) })]
+          : m.calendarConnected
+            ? [el('button', { class: 'btn danger small', type: 'button', text: 'Remove events', onclick: () => disconnectCalendar(m.id) })]
+            : [el('button', { class: 'btn soft small', type: 'button', text: `I'm ${m.name}: connect`, onclick: () => connectCalendar(m.id) })];
+        return el('div', { class: 'gcal-row' }, avatar(m),
+          el('div', {}, el('div', { class: 'n', text: m.name }), el('div', { class: 's', text: status })),
+          el('div', { class: 'acts' }, acts));
+      }) : [el('p', { class: 'muted', style: 'margin:0', text: 'Add family members first.' })]));
   }
 
   // ---------- Family lifecycle ----------
@@ -881,6 +1172,8 @@
     listen('completions', (rows) => { state.completions = Object.fromEntries(rows.map((r) => [r.id, r])); });
     listen('meals', (rows) => { state.meals = Object.fromEntries(rows.map((r) => [r.id, r.title || r.dinner || ''])); });
     listen('groceries', (rows) => { state.groceries = rows; });
+    listen('events', (rows) => { state.events = rows; });
+    autoSyncCalendar();
   }
 
   function enterFamily(id) {
@@ -925,7 +1218,9 @@
     $('#taskForm').addEventListener('submit', submitTask);
     $('#tRepeat').addEventListener('change', drawTaskSheet);
     $('#mealForm').addEventListener('submit', (e) => { e.preventDefault(); $('#mealSheet').close(); saveMeal(mealKey, $('#mealInput').value); });
-    ['#taskSheet', '#mealSheet', '#settingsSheet'].forEach((s) => closeOnBackdrop($(s)));
+    ['#taskSheet', '#mealSheet', '#settingsSheet', '#calSheet'].forEach((s) => closeOnBackdrop($(s)));
+    $('#syncBtn').addEventListener('click', syncNow);
+    $('#calImport').addEventListener('click', importChosen);
 
     $('#sSaveName').addEventListener('click', () => famRef().update({ name: $('#sFamilyName').value.trim() }).then(() => toast('Saved')).catch(fail));
     $('#sMemberForm').addEventListener('submit', (e) => {

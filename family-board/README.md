@@ -13,10 +13,9 @@ A shared weekly board for chores, errands, and events. Phones sync in real time,
 
 1. **Create a project.** Go to https://console.firebase.google.com, click *Add project*, and name it (for example, `family-board`). Google Analytics is optional.
 2. **Add a web app.** In *Project settings → Your apps*, click the `</>` icon. Copy the config values into `firebase-config.js`.
-3. **Enable anonymous sign-in.** *Build → Authentication → Get started → Sign-in method → Anonymous → Enable.*
-4. **Create Firestore.** *Build → Firestore Database → Create database.* Choose a region near you, and start in production mode.
-5. **Add the security rules.** In Firestore → *Rules*, paste the contents of `firestore.rules`, then *Publish*.
-6. **Hosting (free).** Install the CLI once: `npm install -g firebase-tools`. Then from this folder run:
+3. **Create Firestore.** *Build → Firestore Database → Create database.* Choose a region near you, and start in production mode.
+4. **Add the security rules.** In Firestore → *Rules*, paste the contents of `firestore.rules`, then *Publish*.
+5. **Hosting (free).** Install the CLI once: `npm install -g firebase-tools`. Then from this folder run:
    ```
    firebase login
    firebase init hosting     # public directory: . , single-page app: No, overwrite index.html: No
@@ -32,8 +31,8 @@ A shared weekly board for chores, errands, and events. Phones sync in real time,
 
 ## Security notes
 - Anyone with the share link can view and edit that family's board. Treat the link like a password.
-- Sign-in is anonymous, so there are no accounts or passwords to manage.
-- The rules in `firestore.rules` allow access only to signed-in users. They do not check which family someone belongs to. Because family IDs are long and random, guessing one is impractical, but a leaked link gives full access.
+- There is no sign-in, so there are no accounts or passwords to manage.
+- The rules in `firestore.rules` let anyone read or change a family's board if they know its exact family ID, and block listing all families. Because family IDs are long and random, guessing one is impractical, but a leaked link gives full access.
 - Do not put passwords, medical data, or other sensitive information on the board.
 
 ## Limits on the free plan

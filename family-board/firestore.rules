@@ -2,13 +2,18 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Anyone signed in (anonymously) can read and write a family they have the ID for.
-    // The family ID is a random 32-character string, so it works as the access key.
+    // No accounts: the random 32-character family ID in the share link is the access key.
+    // A family can be read only by its exact ID; listing all families is not allowed.
     match /families/{familyId} {
-      allow read, write: if request.auth != null;
+      allow get, create, update: if familyId.size() >= 32;
+      allow list, delete: if false;
 
       match /tasks/{taskId} {
-        allow read, write: if request.auth != null;
+        allow read, delete: if true;
+        allow create, update: if request.resource.data.title is string
+                              && request.resource.data.title.size() <= 200
+                              && request.resource.data.date is string
+                              && request.resource.data.date.size() == 10;
       }
     }
   }

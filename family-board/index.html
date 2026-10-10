@@ -89,7 +89,6 @@
 <div id="error" hidden></div>
 
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="firebase-config.js"></script>
 <script>
@@ -254,9 +253,7 @@
 
   firebase.initializeApp(cfg);
   db = firebase.firestore();
-  firebase.auth().signInAnonymously()
-    .then(start)
-    .catch((e) => showError('Sign-in failed: ' + e.message + ' (Is Anonymous sign-in enabled in Firebase?)'));
+  start();
 })();
 </script>
 </body>

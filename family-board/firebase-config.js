@@ -11,4 +11,4 @@ window.FIREBASE_CONFIG = {
 
 // Google Calendar: the OAuth "Web application" client ID from Google Cloud Console
 // (APIs & Services → Credentials). It is public by design, not a secret. Leave empty to hide the feature.
-window.GOOGLE_CLIENT_ID = "";
+window.GOOGLE_CLIENT_ID = "429010098169-vsd0caa98hri1nemihe6vd4u23rjh1df.apps.googleusercontent.com";

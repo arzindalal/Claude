@@ -17,6 +17,7 @@ Modeled on the Skylight Calendar feature set.
 - **Lists**: groceries split into Costco, Indian store, and grocery store sections with checkboxes for shopping (tap a store to see only its list), plus any number of custom color-coded lists.
 - **Weather** for your city (Open-Meteo, free, no key).
 - **Wall display** (`?kiosk=1`): fully interactive, keeps the screen awake, returns to the chore chart after 3 idle minutes, photo screensaver, and night-time sleep mode.
+- **Reminders** on each device: a notification when a chore or event with a time is due (at the time, or 10/30/60 minutes before). They work while the board is open or recently used; on iPhone and iPad the board must be added to the Home Screen first.
 - **Parent PIN** to keep kids out of settings and the reward shop (a kid lock, not real security).
 - Live sync between all devices, dark mode, confetti, and "Add to Home Screen" support.
 
@@ -80,4 +81,4 @@ To connect: ⚙️ → Google Calendar → "I'm Mom: connect" → pick which cal
 - Automatic background Google Calendar sync (needs a server; today each person's phone syncs their calendar).
 - AI features like Skylight's Sidekick (turning school emails or flyer photos into events).
 - Outlook / iCloud calendar sync.
-- Per-person accounts and notifications.
+- Per-person accounts, and reminders that arrive when the app is fully closed (needs Firebase Cloud Messaging and a scheduled function on the pay-as-you-go plan).

@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en" data-version="2026-10-10.064514">
+<html lang="en" data-version="2026-10-10.065000">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
@@ -7,12 +7,12 @@
 <meta name="theme-color" content="#FF5A7E">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Family Board">
-<link rel="manifest" href="manifest.webmanifest?v=2026-10-10.064514">
+<link rel="manifest" href="manifest.webmanifest?v=2026-10-10.065000">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Nunito:wght@400;600;700;800&display=swap">
-<link rel="stylesheet" href="styles.css?v=2026-10-10.064514">
+<link rel="stylesheet" href="styles.css?v=2026-10-10.065000">
 </head>
 <body>
 <canvas id="confetti" aria-hidden="true"></canvas>
@@ -28,8 +28,8 @@
       </label>
       <button id="createBtn" class="btn" type="button">Create our family board</button>
       <hr class="divider">
-      <label class="field" for="joinCode">Already have a board? Paste the family code
-        <span class="row"><input id="joinCode" placeholder="Family code"><button id="joinBtn" class="btn soft" type="button">Join</button></span>
+      <label class="field" for="joinCode">Already have a board? Paste the family link or code
+        <span class="row"><input id="joinCode" placeholder="Family link or code"><button id="joinBtn" class="btn soft" type="button">Join</button></span>
       </label>
     </div>
   </div>
@@ -155,6 +155,7 @@
 <dialog id="settingsSheet" aria-labelledby="settingsTitle">
   <div class="sheet">
     <div class="sheet-head"><h2 id="settingsTitle">Family settings</h2><button type="button" class="icon-btn" data-close aria-label="Close">✕</button></div>
+    <p class="board-id" id="sBoardId"></p>
     <label class="field" for="sFamilyName">Family name
       <span class="row"><input id="sFamilyName" maxlength="40"><button id="sSaveName" class="btn soft small" type="button">Save</button></span>
     </label>
@@ -209,6 +210,17 @@
       <button id="sClearPin" class="btn danger small" type="button">Remove PIN</button>
     </div>
     <hr class="divider">
+    <h3>Reminders on this device</h3>
+    <p class="muted" style="margin:0" id="rmHint">Get a notification when a chore or event with a time is due. Each phone or tablet turns this on for itself.</p>
+    <div class="row">
+      <select id="rmWho" aria-label="Whose items to remind about"></select>
+      <select id="rmLead" aria-label="When to remind">
+        <option value="0">At the time</option><option value="10">10 min before</option><option value="30">30 min before</option><option value="60">1 hour before</option>
+      </select>
+      <button id="rmToggle" class="btn soft small" type="button">🔔 Turn on reminders</button>
+    </div>
+    <p class="muted" id="rmStatus" style="margin:0"></p>
+    <hr class="divider">
     <h3>Share</h3>
     <p class="muted" style="margin:0">Anyone with the family link can see and change the board. Share it only with family.</p>
     <div class="row">
@@ -250,7 +262,7 @@
 
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-<script src="firebase-config.js?v=2026-10-10.064514"></script>
-<script src="app.js?v=2026-10-10.064514"></script>
+<script src="firebase-config.js?v=2026-10-10.065000"></script>
+<script src="app.js?v=2026-10-10.065000"></script>
 </body>
 </html>

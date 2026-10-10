@@ -1054,6 +1054,8 @@
     const w = state.family.weather;
     $('#sCityNow').textContent = w ? `Showing weather for ${w.name}.` : 'Add a city to show the forecast on the board.';
     $('#sCode').textContent = `Family code: ${state.familyId}`;
+    $('#sBoardId').textContent = `Board …${String(state.familyId).slice(-6)} · version ${document.documentElement.dataset.version || '?'}`;
+    renderReminderSettings();
     renderGcalRows();
   }
 
@@ -1403,6 +1405,77 @@
       }) : [el('p', { class: 'muted', style: 'margin:0', text: 'Add family members first.' })]));
   }
 
+  // ---------- Reminders (on this device, while the board is open or recently used) ----------
+  const remKey = () => `reminders:${state.familyId}`;
+  const remCfg = () => { try { return JSON.parse(store.get(remKey()) || 'null'); } catch (_) { return null; } };
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const isStandalone = () => matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+  let swReg = null;
+  async function registerSW() {
+    if (!('serviceWorker' in navigator)) return;
+    try { swReg = await navigator.serviceWorker.register('sw.js'); } catch (e) { console.warn('Service worker not registered', e); }
+  }
+  async function showReminder(title, body, tag) {
+    try {
+      const reg = swReg || (navigator.serviceWorker && await navigator.serviceWorker.getRegistration());
+      if (reg && reg.showNotification) await reg.showNotification(title, { body, tag, icon: 'icon.svg', badge: 'icon.svg' });
+      else new Notification(title, { body, tag, icon: 'icon.svg' });
+    } catch (e) { console.warn('Notification failed', e); }
+  }
+  function renderReminderSettings() {
+    const cfg = remCfg() || { on: false, who: 'all', lead: 10 };
+    const who = $('#rmWho');
+    who.replaceChildren(el('option', { value: 'all', text: "Everyone's items" }), ...state.family.members.map((m) => el('option', { value: m.id, text: `${m.emoji} ${m.name}'s items` })));
+    who.value = state.family.members.some((m) => m.id === cfg.who) ? cfg.who : 'all';
+    $('#rmLead').value = String(cfg.lead ?? 10);
+    const supported = 'Notification' in window;
+    const perm = supported ? Notification.permission : 'unsupported';
+    $('#rmToggle').textContent = cfg.on && perm === 'granted' ? '🔕 Turn off reminders' : '🔔 Turn on reminders';
+    let status = '';
+    if (!supported && isIOS && !isStandalone()) status = 'On iPhone and iPad: tap Share → Add to Home Screen, open the board from that icon, then turn reminders on here.';
+    else if (!supported) status = 'This browser does not support notifications.';
+    else if (perm === 'denied') status = 'Notifications are blocked for this site. Allow them in your browser or phone settings, then try again.';
+    else if (cfg.on && perm === 'granted') status = 'Reminders are on for this device. They arrive while the board is open or was used recently; fully closed apps may miss them.';
+    $('#rmStatus').textContent = status;
+  }
+  function saveRemCfg(patch) { store.set(remKey(), JSON.stringify({ ...(remCfg() || { on: false, who: 'all', lead: 10 }), ...patch })); }
+  async function toggleReminders() {
+    const cfg = remCfg();
+    if (cfg && cfg.on && 'Notification' in window && Notification.permission === 'granted') {
+      saveRemCfg({ on: false }); toast('Reminders off on this device'); renderReminderSettings(); return;
+    }
+    if (!('Notification' in window)) { renderReminderSettings(); toast(isIOS ? 'Add the board to your Home Screen first (see below)' : 'This browser does not support notifications'); return; }
+    const perm = await Notification.requestPermission();
+    if (perm !== 'granted') { renderReminderSettings(); toast('Notifications were not allowed'); return; }
+    saveRemCfg({ on: true, who: $('#rmWho').value, lead: Number($('#rmLead').value) });
+    await registerSW();
+    showReminder('Reminders are on 🔔', "You'll get a heads-up when chores and events with a time are due.", 'reminders-on');
+    renderReminderSettings();
+  }
+  function checkReminders() {
+    const cfg = remCfg();
+    if (!cfg || !cfg.on || !state.familyId || !('Notification' in window) || Notification.permission !== 'granted') return;
+    const todayKey = dayKey(today0());
+    const sentKey = `remSent:${state.familyId}:${todayKey}`;
+    store.del(`remSent:${state.familyId}:${dayKey(addDays(today0(), -1))}`);
+    let sent; try { sent = new Set(JSON.parse(store.get(sentKey) || '[]')); } catch (_) { sent = new Set(); }
+    const now = Date.now();
+    const items = [...itemsFor(todayKey, 'all', 'board'), ...itemsFor(todayKey, 'all', 'routines')]
+      .filter((i) => i.time && !i.allDay && !i.done && (cfg.who === 'all' || i.memberId === cfg.who));
+    let changed = false;
+    for (const i of items) {
+      const [h, m] = i.time.split(':').map(Number);
+      const due = new Date(today0()); due.setHours(h, m, 0, 0);
+      const id = `${i.kind}:${i.id}:${i.cid || ''}`;
+      if (sent.has(id) || now < due.getTime() - (cfg.lead || 0) * 60000 || now > due.getTime() + 15 * 60000) continue;
+      sent.add(id); changed = true;
+      const who = memberById(i.memberId);
+      const mins = Math.round((due.getTime() - now) / 60000);
+      showReminder(`${isTodo(i) ? '⏰' : '📅'} ${i.title}`, `${mins > 0 ? `In ${mins} min` : 'Now'} · ${fmtTime(i.time)}${who ? ` · ${who.emoji} ${who.name}` : ''}`, id);
+    }
+    if (changed) store.set(sentKey, JSON.stringify([...sent]));
+  }
+
   // ---------- Family lifecycle ----------
   function watchFamily() {
     unsubs.forEach((u) => u());
@@ -1435,7 +1508,7 @@
   function enterFamily(id) {
     state.familyId = id;
     store.set('familyId', id);
-    history.replaceState(null, '', location.pathname + (KIOSK ? '?kiosk=1' : ''));
+    history.replaceState(null, '', `${location.pathname}?family=${id}${KIOSK ? '&kiosk=1' : ''}`);
     $('#setup').hidden = true;
     $('#app').hidden = false;
     render();
@@ -1453,7 +1526,8 @@
   }
 
   async function joinFamily() {
-    const id = $('#joinCode').value.trim();
+    const raw = $('#joinCode').value.trim();
+    const id = (raw.match(/family=([A-Za-z0-9]+)/) || [])[1] || raw;
     if (!id) return;
     try {
       const doc = await db.collection('families').doc(id).get();
@@ -1546,6 +1620,12 @@
     setInterval(() => { if (dayKey(today0()) !== state.lastDay) render(); else renderHeader(); }, 20 * 1000);
     setInterval(() => loadWeather(true), 30 * 60 * 1000);
     if (KIOSK) setInterval(kioskTick, 15 * 1000);
+    $('#rmToggle').addEventListener('click', toggleReminders);
+    $('#rmWho').addEventListener('change', () => { saveRemCfg({ who: $('#rmWho').value }); });
+    $('#rmLead').addEventListener('change', () => { saveRemCfg({ lead: Number($('#rmLead').value) }); });
+    setInterval(checkReminders, 30 * 1000);
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') checkReminders(); });
+    if ((remCfg() || {}).on) registerSW();
     // Reload open boards (phones, wall display) a few minutes after a new version is published.
     const myVersion = document.documentElement.dataset.version || '';
     setInterval(async () => {

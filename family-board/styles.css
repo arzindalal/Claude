@@ -359,3 +359,4 @@ body.kiosk { padding-bottom: 120px; }
   .groc .move { max-width: 52px; padding: 4px 2px; }
   .store { padding: 12px 10px; }
 }
+.board-id { margin: -6px 0 0; color: var(--muted); font-size: .8rem; font-weight: 700; font-variant-numeric: tabular-nums; }

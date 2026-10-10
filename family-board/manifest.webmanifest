@@ -2,7 +2,6 @@
   "name": "Family Board",
   "short_name": "Family Board",
   "description": "Your family's chores, plans, meals, and groceries on one shared board.",
-  "start_url": "./",
   "display": "standalone",
   "background_color": "#F3F6FF",
   "theme_color": "#FF5A7E",

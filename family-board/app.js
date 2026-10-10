@@ -366,13 +366,31 @@
     const showChips = ['calendar', 'today', 'routines'].includes(state.view) && state.family.members.length > 0;
     box.hidden = !showChips;
     if (!showChips) return;
-    const todayKey = dayKey(today0());
     const mode = state.view === 'routines' ? 'routines' : 'board';
-    const left = (id) => itemsFor(todayKey, id, mode).filter((i) => isTodo(i) && !i.done).length;
-    const chip = (id, label, m) => el('button', {
-      class: 'chip', type: 'button', 'aria-pressed': String(state.filter === id),
-      onclick: () => { state.filter = state.filter === id ? 'all' : id; render(); },
-    }, m ? avatar(m) : el('span', { class: 'avatar', text: '👨‍👩‍👧' }), label, el('span', { class: 'count', title: 'Left today', text: String(left(id)) }));
+    // Count what is left in the range on screen: the visible week or month on the calendar, otherwise today.
+    let keys = [dayKey(today0())]; let span = 'today';
+    if (state.view === 'calendar') {
+      const t = today0();
+      if (state.calMode === 'month') {
+        const first = new Date(t.getFullYear(), t.getMonth() + state.offset, 1);
+        const n = new Date(first.getFullYear(), first.getMonth() + 1, 0).getDate();
+        keys = [...Array(n)].map((_, i) => dayKey(addDays(first, i))); span = 'this month';
+      } else if (state.calMode === 'schedule') {
+        const start = addDays(t, state.offset * 21);
+        keys = [...Array(21)].map((_, i) => dayKey(addDays(start, i))); span = 'in these 3 weeks';
+      } else {
+        keys = weekKeys(addDays(mondayOf(t), state.offset * 7)); span = 'this week';
+      }
+    }
+    const left = (id) => keys.reduce((n, k) => n + itemsFor(k, id, mode).filter((i) => isTodo(i) && !i.done).length, 0);
+    const chip = (id, label, m) => {
+      const n = left(id);
+      return el('button', {
+        class: 'chip', type: 'button', 'aria-pressed': String(state.filter === id),
+        title: `${n} chore${n === 1 ? '' : 's'} left ${span}. Tap to show only ${id === 'all' ? 'everyone' : label}.`,
+        onclick: () => { state.filter = state.filter === id ? 'all' : id; render(); },
+      }, m ? avatar(m) : el('span', { class: 'avatar', text: '👨‍👩‍👧' }), label, el('span', { class: 'count', 'aria-label': `${n} left ${span}`, text: String(n) }));
+    };
     box.replaceChildren(chip('all', 'Everyone', null), ...state.family.members.map((m) => chip(m.id, m.name, m)));
   }
 

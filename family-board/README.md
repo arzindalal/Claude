@@ -5,10 +5,16 @@
 A shared weekly board for chores, errands, and events. Phones sync in real time, and a kiosk view works on a wall tablet. It runs on Firebase's free Spark plan.
 
 ## Features
-- Seven-day board, starting today.
-- Tasks tagged by family member, with a color for each person.
-- Anyone can check off or add tasks from their own phone.
-- **Kiosk mode** (`?kiosk=1`): read-only, large text, updates live, no sign-in screens.
+- **Week board** (Monday–Sunday) with a dinner slot on every day.
+- **Today board**: one column per person, with a progress ring.
+- **Repeating chores**: every day, weekdays, or chosen days. Each day is checked off separately.
+- **Stars**: every task is worth 1–5 stars. Weekly leaderboard, daily streaks, and a family reward goal.
+- **Meal plan** and a shared **grocery list**.
+- **Family members** with emoji avatars and their own colors.
+- Optional times on tasks, sorted by time.
+- Confetti and a cheer when something is done.
+- Live sync between phones, dark mode, and "Add to Home Screen" support.
+- **Wall display** (`?kiosk=1`): Today board with a big clock, no edit controls, screen kept awake.
 - Share link: send it to family members to join the same board.
 
 ## One-time Firebase setup (about 10 minutes)

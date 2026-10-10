@@ -5,15 +5,19 @@ service cloud.firestore {
     // No accounts: the random 32-character family ID in the share link is the access key.
     // A family can be read only by its exact ID; listing all families is not allowed.
     match /families/{familyId} {
-      allow get, create, update: if familyId.size() >= 32;
+      allow get: if familyId.size() >= 32;
+      allow create, update: if familyId.size() >= 32
+                            && request.resource.data.keys().size() <= 10;
       allow list, delete: if false;
 
-      match /tasks/{taskId} {
-        allow read, delete: if true;
-        allow create, update: if request.resource.data.title is string
-                              && request.resource.data.title.size() <= 200
-                              && request.resource.data.date is string
-                              && request.resource.data.date.size() == 10;
+      // Board data: tasks, repeating chores, chore check-offs, meals, groceries.
+      match /{coll}/{docId} {
+        allow read, delete: if coll in ['tasks', 'chores', 'completions', 'meals', 'groceries'];
+        allow create, update: if coll in ['tasks', 'chores', 'completions', 'meals', 'groceries']
+                              && request.resource.data.keys().size() <= 12
+                              && (!('title' in request.resource.data)
+                                  || (request.resource.data.title is string
+                                      && request.resource.data.title.size() <= 200));
       }
     }
   }

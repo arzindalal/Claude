@@ -1457,6 +1457,23 @@
     setInterval(() => { if (dayKey(today0()) !== state.lastDay) render(); else renderHeader(); }, 20 * 1000);
     setInterval(() => loadWeather(true), 30 * 60 * 1000);
     if (KIOSK) setInterval(kioskTick, 15 * 1000);
+    // Reload open boards (phones, wall display) a few minutes after a new version is published.
+    const myVersion = document.documentElement.dataset.version || '';
+    setInterval(async () => {
+      try {
+        const r = await fetch(`version.json?ts=${Date.now()}`, { cache: 'no-store' });
+        if (!r.ok) return;
+        const { v } = await r.json();
+        const busy = document.querySelector('dialog[open]') || (document.activeElement && /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName));
+        let tried = '';
+        try { tried = sessionStorage.getItem('reloadedFor') || ''; } catch (_) {}
+        // Reload once per new version, so a stale cached page can never loop.
+        if (v && myVersion && v !== myVersion && v !== tried && !busy) {
+          try { sessionStorage.setItem('reloadedFor', v); } catch (_) {}
+          location.reload();
+        }
+      } catch (_) { /* offline: try again later */ }
+    }, 5 * 60 * 1000);
     // Week cards switch between compact (7 columns) and full (stacked days) layouts.
     let narrow = matchMedia('(max-width: 1000px)').matches;
     addEventListener('resize', () => {

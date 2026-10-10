@@ -9,12 +9,13 @@
       ".firebaserc",
       "firestore.rules",
       "README.md",
+      "bump-version.sh",
       "**/.*",
       "**/node_modules/**"
     ],
     "headers": [
       {
-        "source": "**/*.@(html|js|css|webmanifest)",
+        "source": "**/*.@(html|js|css|json|webmanifest)",
         "headers": [{ "key": "Cache-Control", "value": "no-cache" }]
       },
       {

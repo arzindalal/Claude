@@ -1,0 +1,263 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Family Board</title>
+<style>
+  :root { --bg:#f7f5f2; --card:#fff; --ink:#222; --muted:#7a7a7a; --line:#e4e0da; --accent:#3b7ddd; }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) { --bg:#141414; --card:#202020; --ink:#eee; --muted:#9a9a9a; --line:#333; --accent:#6ea8ff; }
+  }
+  :root[data-theme="dark"] { --bg:#141414; --card:#202020; --ink:#eee; --muted:#9a9a9a; --line:#333; --accent:#6ea8ff; }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family: system-ui, sans-serif; background:var(--bg); color:var(--ink); }
+  header { display:flex; justify-content:space-between; align-items:center; gap:8px; padding:12px 16px; flex-wrap:wrap; }
+  h1 { font-size:1.3rem; margin:0; }
+  h3 { margin:0 0 8px; font-size:1rem; }
+  button, input, select { font:inherit; border-radius:8px; border:1px solid var(--line); padding:8px 10px; background:var(--card); color:var(--ink); }
+  button { cursor:pointer; background:var(--accent); color:#fff; border-color:var(--accent); }
+  button.ghost { background:var(--card); color:var(--ink); border-color:var(--line); }
+  .panel { margin:0 16px 12px; padding:12px; background:var(--card); border:1px solid var(--line); border-radius:12px; }
+  .row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+  .row input { flex:1; min-width:120px; }
+  #week { display:grid; grid-template-columns:repeat(7, minmax(150px,1fr)); gap:10px; padding:0 16px 16px; overflow-x:auto; }
+  .day { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:10px; min-height:140px; }
+  .day.today { border-color:var(--accent); box-shadow:0 0 0 1px var(--accent) inset; }
+  .task { display:flex; align-items:center; gap:6px; padding:6px 8px; margin-bottom:6px; border-left:4px solid #999; background:var(--bg); border-radius:6px; }
+  .task span { flex:1; word-break:break-word; }
+  .task small { color:var(--muted); }
+  .task.done span { text-decoration:line-through; color:var(--muted); }
+  .task button { background:none; color:var(--muted); border:none; padding:0 4px; }
+  .empty { color:var(--muted); font-size:.9rem; }
+  .muted { color:var(--muted); font-size:.9rem; }
+  #setup, #error { max-width:520px; margin:40px auto; padding:0 16px; }
+  #error { color:#c0392b; }
+  /* Kiosk: large, read-only, wall-display friendly */
+  body.kiosk header { padding:20px 24px; }
+  body.kiosk h1 { font-size:2rem; }
+  body.kiosk #week { grid-template-columns:repeat(7, 1fr); gap:14px; padding:0 24px 24px; }
+  body.kiosk .day { min-height:70vh; padding:16px; }
+  body.kiosk h3 { font-size:1.3rem; }
+  body.kiosk .task { font-size:1.2rem; padding:10px; }
+  body.kiosk .task small { font-size:1rem; }
+  body.kiosk .panel, body.kiosk .hide-kiosk { display:none; }
+  @media (max-width: 700px) { #week { grid-template-columns: repeat(7, 80vw); } }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Family Board</h1>
+  <div class="row hide-kiosk">
+    <button class="ghost" id="shareBtn">Copy share link</button>
+    <button class="ghost" id="kioskBtn">Copy kiosk link</button>
+    <button class="ghost" id="leaveBtn">Leave family</button>
+  </div>
+</header>
+
+<div id="setup" hidden>
+  <div class="panel">
+    <h3>Start your family board</h3>
+    <div class="row" style="margin-bottom:12px">
+      <button id="createBtn">Create a new family</button>
+    </div>
+    <p class="muted">Or join an existing one with the code from a family member's share link.</p>
+    <div class="row">
+      <input id="joinCode" placeholder="Family code">
+      <button id="joinBtn" class="ghost">Join</button>
+    </div>
+  </div>
+</div>
+
+<div id="app" hidden>
+  <div class="panel hide-kiosk">
+    <form id="addForm" class="row">
+      <input id="title" placeholder="Task or event, e.g. Soccer practice" required>
+      <select id="member"></select>
+      <input id="date" type="date" required>
+      <button type="submit">Add</button>
+    </form>
+    <form id="memberForm" class="row" style="margin-top:10px">
+      <input id="newMember" placeholder="Add a family member">
+      <button type="submit" class="ghost">Add member</button>
+    </form>
+  </div>
+  <div id="week"></div>
+</div>
+
+<div id="error" hidden></div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="firebase-config.js"></script>
+<script>
+(() => {
+  const $ = (s) => document.querySelector(s);
+  const params = new URLSearchParams(location.search);
+  const KIOSK = params.has('kiosk');
+  const PALETTE = ['#e76f51', '#2a9d8f', '#e9c46a', '#264653', '#8e7dbe', '#f4a261', '#577590', '#90be6d'];
+
+  let familyId = params.get('family') || localStorage.getItem('familyId');
+  let members = [];
+  let tasks = [];
+  let db, unsubs = [];
+
+  const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+  const dayKey = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const colorFor = (name) => { const i = members.indexOf(name); return i < 0 ? '#999' : PALETTE[i % PALETTE.length]; };
+  const famRef = () => db.collection('families').doc(familyId);
+  const showError = (msg) => { const el = $('#error'); el.textContent = msg; el.hidden = false; };
+
+  if (KIOSK) document.body.classList.add('kiosk');
+  if (params.get('family')) localStorage.setItem('familyId', params.get('family'));
+
+  function showSetup() {
+    $('#setup').hidden = false;
+    $('#app').hidden = true;
+  }
+
+  function showApp() {
+    $('#setup').hidden = true;
+    $('#app').hidden = false;
+    $('#date').value = dayKey(new Date());
+  }
+
+  function watchFamily() {
+    unsubs.forEach((u) => u());
+    unsubs = [
+      famRef().onSnapshot((doc) => {
+        members = (doc.data() && doc.data().members) || [];
+        render();
+      }),
+      famRef().collection('tasks').onSnapshot((snap) => {
+        tasks = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+        render();
+      }),
+    ];
+  }
+
+  async function createFamily() {
+    const id = crypto.randomUUID().replace(/-/g, '');
+    await db.collection('families').doc(id).set({ members: [], createdAt: firebase.firestore.FieldValue.serverTimestamp() });
+    setFamily(id);
+  }
+
+  async function joinFamily(code) {
+    const id = code.trim();
+    if (!id) return;
+    const doc = await db.collection('families').doc(id).get();
+    if (!doc.exists) { showError('No family found with that code.'); return; }
+    setFamily(id);
+  }
+
+  function setFamily(id) {
+    familyId = id;
+    localStorage.setItem('familyId', id);
+    history.replaceState(null, '', location.pathname + (KIOSK ? '?kiosk=1' : ''));
+    showApp();
+    watchFamily();
+  }
+
+  function render() {
+    const memberSel = $('#member');
+    const prev = memberSel.value;
+    memberSel.innerHTML = members.map((m) => `<option>${esc(m)}</option>`).join('') || '<option value="">Add a member first</option>';
+    if (members.includes(prev)) memberSel.value = prev;
+
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const todayKey = dayKey(today);
+    const days = [...Array(7)].map((_, i) => { const d = new Date(today); d.setDate(d.getDate() + i); return d; });
+
+    $('#week').innerHTML = days.map((d) => {
+      const key = dayKey(d);
+      const list = tasks
+        .filter((t) => t.date === key)
+        .sort((a, b) => (a.done - b.done) || String(a.title).localeCompare(String(b.title)));
+      const items = list.map((t) => `
+        <div class="task ${t.done ? 'done' : ''}" style="border-left-color:${colorFor(t.member)}">
+          ${KIOSK ? '' : `<input type="checkbox" data-toggle="${esc(t.id)}" ${t.done ? 'checked' : ''} aria-label="Done">`}
+          <span>${esc(t.title)}<br><small>${esc(t.member || '')}</small></span>
+          ${KIOSK ? '' : `<button data-del="${esc(t.id)}" aria-label="Delete">×</button>`}
+        </div>`).join('');
+      return `<section class="day ${key === todayKey ? 'today' : ''}">
+        <h3>${d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}</h3>
+        ${items || '<p class="empty">Nothing planned</p>'}
+      </section>`;
+    }).join('');
+  }
+
+  function bindUI() {
+    $('#createBtn').onclick = () => createFamily().catch((e) => showError(e.message));
+    $('#joinBtn').onclick = () => joinFamily($('#joinCode').value).catch((e) => showError(e.message));
+
+    $('#addForm').onsubmit = (e) => {
+      e.preventDefault();
+      const title = $('#title').value.trim();
+      const member = $('#member').value;
+      if (!title || !member) return;
+      famRef().collection('tasks').add({
+        title, member, date: $('#date').value, done: false,
+        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+      }).then(() => { $('#title').value = ''; });
+    };
+
+    $('#memberForm').onsubmit = (e) => {
+      e.preventDefault();
+      const name = $('#newMember').value.trim();
+      if (!name) return;
+      famRef().update({ members: firebase.firestore.FieldValue.arrayUnion(name) })
+        .then(() => { $('#newMember').value = ''; });
+    };
+
+    $('#week').addEventListener('change', (e) => {
+      const id = e.target.dataset.toggle;
+      if (id) famRef().collection('tasks').doc(id).update({ done: e.target.checked });
+    });
+    $('#week').addEventListener('click', (e) => {
+      const id = e.target.dataset.del;
+      if (id && confirm('Delete this task?')) famRef().collection('tasks').doc(id).delete();
+    });
+
+    const base = location.origin + location.pathname;
+    $('#shareBtn').onclick = () => copy(`${base}?family=${familyId}`);
+    $('#kioskBtn').onclick = () => copy(`${base}?family=${familyId}&kiosk=1`);
+    $('#leaveBtn').onclick = () => {
+      if (!confirm('Leave this family on this device?')) return;
+      unsubs.forEach((u) => u());
+      localStorage.removeItem('familyId');
+      familyId = null;
+      showSetup();
+    };
+  }
+
+  function copy(text) {
+    navigator.clipboard.writeText(text).then(() => alert('Link copied:\n' + text), () => prompt('Copy this link:', text));
+  }
+
+  async function start() {
+    bindUI();
+    if (familyId) {
+      setFamily(familyId);
+      if (!KIOSK) setInterval(render, 60 * 1000); // keep "today" highlight correct after midnight
+    } else {
+      showSetup();
+    }
+  }
+
+  const cfg = window.FIREBASE_CONFIG || {};
+  if (!cfg.apiKey || cfg.apiKey.startsWith('YOUR_')) {
+    showError('Add your Firebase keys to firebase-config.js first. See README.md.');
+    return;
+  }
+
+  firebase.initializeApp(cfg);
+  db = firebase.firestore();
+  firebase.auth().signInAnonymously()
+    .then(start)
+    .catch((e) => showError('Sign-in failed: ' + e.message + ' (Is Anonymous sign-in enabled in Firebase?)'));
+})();
+</script>
+</body>
+</html>

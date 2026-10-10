@@ -7,6 +7,8 @@
   const PERIODS = [['morning', '🌅', 'Morning'], ['afternoon', '🌤️', 'Afternoon'], ['evening', '🌙', 'Evening']];
   const LEGACY_VIEWS = { week: 'calendar', groceries: 'lists', stars: 'rewards' };
   const VIEWS = ['calendar', 'today', 'routines', 'meals', 'lists', 'rewards'];
+  const STORES = [['costco', '🏬', 'Costco', '#E31837'], ['indian', '🌶️', 'Indian store', '#FF9F68'], ['grocery', '🥬', 'Grocery store', '#17A884']];
+  const storeOf = (g) => (STORES.some((x) => x[0] === g.store) ? g.store : 'grocery');
 
   const $ = (s) => document.querySelector(s);
   const params = new URLSearchParams(location.search);
@@ -27,6 +29,7 @@
     view: KIOSK ? 'today' : (VIEWS.includes(savedView) ? savedView : 'calendar'),
     calMode: ['week', 'month', 'schedule'].includes(store.get('calMode')) ? store.get('calMode') : 'week',
     routinePeriod: null, activeList: store.get('activeList') || 'groceries',
+    shopAt: store.get('shopAt') || 'all',
     filter: 'all', offset: 0, lastDay: '', redeeming: null, editingGoal: false,
   };
   let db = null;
@@ -622,7 +625,7 @@
       try { const r = await col('lists').add({ title: v, emoji, color, createdAt: Date.now() }); state.activeList = r.id; store.set('activeList', r.id); render(); } catch (err) { fail(err); }
     } }, newName, el('button', { class: 'btn soft', type: 'submit', text: 'Create list' }));
     return el('div', { class: 'stack' }, chips,
-      el('div', { class: 'panel', style: `border-top:6px solid ${safeColor(active.color)}` },
+      isG ? groceryPanel() : el('div', { class: 'panel', style: `border-top:6px solid ${safeColor(active.color)}` },
         el('div', { class: 'weeknav' }, el('h2', { text: `${active.emoji || '📝'} ${active.title}` }),
           active.builtin ? null : btn('Delete list', async () => {
             if (!confirm(`Delete the "${active.title}" list and everything on it?`)) return;
@@ -640,6 +643,50 @@
           try { const batch = db.batch(); items.filter((x) => x.done).forEach((x) => batch.delete(ref(x.id))); await batch.commit(); } catch (e) { fail(e); }
         })) : null),
       el('div', { class: 'panel' }, el('h2', { text: '➕ New list' }), newForm));
+  }
+
+  // Groceries: one section per store, each with its own checklist.
+  function groceryPanel() {
+    const shopAt = STORES.some((x) => x[0] === state.shopAt) ? state.shopAt : 'all';
+    const sections = STORES.filter(([id]) => shopAt === 'all' || id === shopAt).map(([id, emoji, name, color]) => {
+      const items = state.groceries.filter((g) => storeOf(g) === id)
+        .sort((a, b) => (a.done - b.done) || ((a.createdAt || 0) - (b.createdAt || 0)));
+      const left = items.filter((g) => !g.done).length;
+      const input = el('input', { id: `listInput-${id}`, maxlength: '80', placeholder: `Add to ${name}…`, 'aria-label': `Add to ${name} list` });
+      const form = el('form', { class: 'row', autocomplete: 'off', onsubmit: async (e) => {
+        e.preventDefault();
+        const v = input.value.trim(); if (!v) return;
+        input.value = '';
+        try { await col('groceries').add({ title: v, store: id, done: false, createdAt: Date.now() }); } catch (err) { fail(err); }
+        document.getElementById(`listInput-${id}`)?.focus();
+      } }, input, el('button', { class: 'btn', type: 'submit', text: 'Add' }));
+      const rows = items.map((g) => {
+        const box = el('input', { type: 'checkbox', class: 'shop-box', id: `g-${g.id}`, style: `accent-color:${color}` });
+        box.checked = !!g.done;
+        box.addEventListener('change', () => col('groceries').doc(g.id).update({ done: box.checked }).catch(fail));
+        return el('div', { class: 'groc' + (g.done ? ' done' : '') },
+          box, el('label', { class: 't', for: `g-${g.id}`, text: g.title }),
+          el('select', { class: 'move', 'aria-label': `Move ${g.title} to another store`, title: 'Move to another store',
+            onchange: (e) => col('groceries').doc(g.id).update({ store: e.target.value }).catch(fail) },
+            STORES.map(([sid, se, sn]) => { const o = el('option', { value: sid, text: `${se} ${sn}` }); o.selected = sid === id; return o; })),
+          btn('✕', () => col('groceries').doc(g.id).delete().catch(fail), 'del btn soft small', { 'aria-label': `Remove ${g.title}` }));
+      });
+      const doneCount = items.length - left;
+      return el('section', { class: 'store', style: `--c:${color}` },
+        el('div', { class: 'store-head' }, el('h3', { text: `${emoji} ${name}` }),
+          el('span', { class: 'muted', text: items.length ? `${left} to buy${doneCount ? ` · ${doneCount} in the cart` : ''}` : 'Nothing yet' })),
+        form,
+        rows.length ? el('div', {}, rows) : null,
+        doneCount ? el('div', {}, btn(`Clear ${doneCount} bought`, async () => {
+          try { const batch = db.batch(); items.filter((x) => x.done).forEach((x) => batch.delete(col('groceries').doc(x.id))); await batch.commit(); } catch (e) { fail(e); }
+        })) : null);
+    });
+    return el('div', { class: 'panel', style: 'border-top:6px solid #7BD3B9' },
+      el('div', { class: 'weeknav' }, el('h2', { text: '🛒 Groceries' }),
+        seg([['all', 'All stores'], ...STORES.map(([id, e, n]) => [id, `${e} ${n}`])], shopAt,
+          (v) => { state.shopAt = v; store.set('shopAt', v); render(); }, 'Shopping at')),
+      el('p', { class: 'muted', style: 'margin:0', text: 'In the store? Pick it above to see only that list, and tick things off as they go in the cart.' }),
+      el('div', { class: 'stores' }, sections));
   }
 
   // ---------- Rewards ----------

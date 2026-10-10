@@ -344,3 +344,18 @@ body.kiosk { padding-bottom: 120px; }
   .countdowns { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 4px; }
   .cd { flex: none; }
 }
+
+/* Groceries by store */
+.stores { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; }
+.store { background: var(--surface-2); border-radius: 16px; padding: 14px; border-top: 6px solid var(--c); display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.store-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.store-head h3 { font-size: 1.2rem; }
+.store .groc { gap: 12px; }
+.shop-box { width: 26px; height: 26px; flex: none; margin: 0; cursor: pointer; }
+.groc label.t { cursor: pointer; }
+.groc .move { padding: 4px 6px; font-size: .8rem; max-width: 120px; border-radius: 8px; }
+.store .groc .t { overflow-wrap: break-word; min-width: 0; }
+@media (max-width: 760px) {
+  .groc .move { max-width: 52px; padding: 4px 2px; }
+  .store { padding: 12px 10px; }
+}

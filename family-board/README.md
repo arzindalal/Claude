@@ -14,7 +14,7 @@ Modeled on the Skylight Calendar feature set.
 - **Routines**: morning, afternoon, and evening habit steps, shown for the current time of day.
 - **Rewards**: stars per chore, weekly leaderboard with streaks, a family goal, and a reward shop where kids spend saved stars.
 - **Meal plan**: breakfast, lunch, dinner, and snack for each day, plus family favorites that pop up as suggestions.
-- **Lists**: groceries plus any number of custom color-coded lists (packing, to-do, gifts…).
+- **Lists**: groceries split into Costco, Indian store, and grocery store sections with checkboxes for shopping (tap a store to see only its list), plus any number of custom color-coded lists.
 - **Weather** for your city (Open-Meteo, free, no key).
 - **Wall display** (`?kiosk=1`): fully interactive, keeps the screen awake, returns to the chore chart after 3 idle minutes, photo screensaver, and night-time sleep mode.
 - **Parent PIN** to keep kids out of settings and the reward shop (a kid lock, not real security).

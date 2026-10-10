@@ -8,3 +8,5 @@ kb_data/
 dist/
 build/
 .DS_Store
+.claude/settings.local.json
+.firebase/

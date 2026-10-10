@@ -1,5 +1,7 @@
 # Family Board
 
+**Live at https://family-board-4d06d.web.app** (Firebase project `family-board-4d06d`). To redeploy after changes, run `firebase deploy` from this folder.
+
 A shared weekly board for chores, errands, and events. Phones sync in real time, and a kiosk view works on a wall tablet. It runs on Firebase's free Spark plan.
 
 ## Features

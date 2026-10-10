@@ -5,17 +5,22 @@
 A shared weekly board for chores, errands, and events. Phones sync in real time, and a kiosk view works on a wall tablet. It runs on Firebase's free Spark plan.
 
 ## Features
-- **Week board** (Monday–Sunday) with a dinner slot on every day.
-- **Today board**: one column per person, with a progress ring.
-- **Repeating chores**: every day, weekdays, or chosen days. Each day is checked off separately.
-- **Stars**: every task is worth 1–5 stars. Weekly leaderboard, daily streaks, and a family reward goal.
-- **Meal plan** and a shared **grocery list**.
-- **Family members** with emoji avatars and their own colors.
-- Optional times on tasks, sorted by time.
-- Confetti and a cheer when something is done.
-- Live sync between phones, dark mode, and "Add to Home Screen" support.
-- **Wall display** (`?kiosk=1`): Today board with a big clock, no edit controls, screen kept awake.
-- Share link: send it to family members to join the same board.
+Modeled on the Skylight Calendar feature set.
+
+- **Calendar** with Week, Month, and Schedule views, a forecast on each day, and family countdowns.
+- **Events and chores**: add for one or several people at once (each gets their own copy), with times, repeats (daily, weekdays, chosen days), and star values. Tap any card to edit or delete it.
+- **Google Calendar sync** per person (read-only, see below).
+- **Chore chart** (Chores tab): one column per person with a progress ring, and a big celebration when someone finishes everything.
+- **Routines**: morning, afternoon, and evening habit steps, shown for the current time of day.
+- **Rewards**: stars per chore, weekly leaderboard with streaks, a family goal, and a reward shop where kids spend saved stars.
+- **Meal plan**: breakfast, lunch, dinner, and snack for each day, plus family favorites that pop up as suggestions.
+- **Lists**: groceries plus any number of custom color-coded lists (packing, to-do, gifts…).
+- **Weather** for your city (Open-Meteo, free, no key).
+- **Wall display** (`?kiosk=1`): fully interactive, keeps the screen awake, returns to the chore chart after 3 idle minutes, photo screensaver, and night-time sleep mode.
+- **Parent PIN** to keep kids out of settings and the reward shop (a kid lock, not real security).
+- Live sync between all devices, dark mode, confetti, and "Add to Home Screen" support.
+
+Not included: Skylight's AI assistant (Sidekick / Magic Import), which needs a paid AI service and a server, and licensed character screensavers.
 
 ## One-time Firebase setup (about 10 minutes)
 
@@ -66,13 +71,13 @@ To connect: ⚙️ → Google Calendar → "I'm Mom: connect" → pick which cal
 - Hosting: 10 GB storage and 360 MB/day transfer. Also more than enough.
 
 ## Files
-- `index.html`: the whole app (HTML, CSS, JavaScript).
+- `index.html`, `styles.css`, `app.js`: the app.
 - `firebase-config.js`: your Firebase keys.
 - `firestore.rules`: database access rules.
 - `README.md`: this file.
 
 ## Not built yet
-- Recurring chores (for example, "trash every Tuesday").
-- Points or streaks.
-- Per-person accounts and permissions.
-- Notifications.
+- Automatic background Google Calendar sync (needs a server; today each person's phone syncs their calendar).
+- AI features like Skylight's Sidekick (turning school emails or flyer photos into events).
+- Outlook / iCloud calendar sync.
+- Per-person accounts and notifications.

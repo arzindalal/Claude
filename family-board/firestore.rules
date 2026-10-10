@@ -7,17 +7,22 @@ service cloud.firestore {
     match /families/{familyId} {
       allow get: if familyId.size() >= 32;
       allow create, update: if familyId.size() >= 32
-                            && request.resource.data.keys().size() <= 10;
+                            && request.resource.data.keys().size() <= 12;
       allow list, delete: if false;
 
-      // Board data: tasks, repeating chores, chore check-offs, meals, groceries, imported calendar events.
+      // Board data. Photos are shrunk in the browser and capped at about 900 KB each.
       match /{coll}/{docId} {
-        allow read, delete: if coll in ['tasks', 'chores', 'completions', 'meals', 'groceries', 'events'];
-        allow create, update: if coll in ['tasks', 'chores', 'completions', 'meals', 'groceries', 'events']
+        allow read, delete: if coll in ['tasks', 'chores', 'completions', 'meals', 'groceries', 'events',
+                                        'rewards', 'redemptions', 'lists', 'listItems', 'countdowns', 'recipes', 'photos'];
+        allow create, update: if coll in ['tasks', 'chores', 'completions', 'meals', 'groceries', 'events',
+                                          'rewards', 'redemptions', 'lists', 'listItems', 'countdowns', 'recipes', 'photos']
                               && request.resource.data.keys().size() <= 12
                               && (!('title' in request.resource.data)
                                   || (request.resource.data.title is string
-                                      && request.resource.data.title.size() <= 200));
+                                      && request.resource.data.title.size() <= 200))
+                              && (coll != 'photos'
+                                  || (request.resource.data.data is string
+                                      && request.resource.data.data.size() < 950000));
       }
     }
   }

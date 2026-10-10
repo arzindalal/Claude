@@ -12,235 +12,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Nunito:wght@400;600;700;800&display=swap">
-<style>
-  /* Layout: greeting + live clock header, view tabs (bottom bar on phones), and one board view at a time.
-     Week = 7 day columns; Today = one column per person; plus Meals, Groceries, Stars. */
-  :root {
-    --bg: #F3F6FF;
-    --bg-glow-1: #FFE3EA;
-    --bg-glow-2: #DDF7EE;
-    --surface: #FFFFFF;
-    --surface-2: #F6F8FF;
-    --ink: #1E2350;
-    --muted: #646A93;
-    --line: #DFE4F6;
-    --accent: #FF5A7E;
-    --accent-ink: #FFFFFF;
-    --sun: #FFB800;
-    --mint: #17A884;
-    --today: #FFF6D6;
-    --shadow: 0 8px 24px rgba(30, 35, 80, .08);
-    --display: "Fredoka", "Trebuchet MS", system-ui, sans-serif;
-    --body: "Nunito", system-ui, -apple-system, "Segoe UI", sans-serif;
-    --radius: 18px;
-  }
-  @media (prefers-color-scheme: dark) {
-    :root:not([data-theme="light"]) {
-      --bg: #11132A; --bg-glow-1: #2A1A35; --bg-glow-2: #12302B; --surface: #1C2042; --surface-2: #232857;
-      --ink: #EEF0FF; --muted: #A3A8D1; --line: #2F3566; --accent: #FF7A96; --accent-ink: #22070F;
-      --sun: #FFC83D; --mint: #3DDCB1; --today: #332E1A; --shadow: 0 8px 24px rgba(0, 0, 0, .35); color-scheme: dark;
-    }
-  }
-  :root[data-theme="dark"] {
-    --bg: #11132A; --bg-glow-1: #2A1A35; --bg-glow-2: #12302B; --surface: #1C2042; --surface-2: #232857;
-    --ink: #EEF0FF; --muted: #A3A8D1; --line: #2F3566; --accent: #FF7A96; --accent-ink: #22070F;
-    --sun: #FFC83D; --mint: #3DDCB1; --today: #332E1A; --shadow: 0 8px 24px rgba(0, 0, 0, .35); color-scheme: dark;
-  }
-
-  * { box-sizing: border-box; }
-  html { -webkit-text-size-adjust: 100%; }
-  body {
-    margin: 0; min-height: 100vh; color: var(--ink); font-family: var(--body); font-size: 16px; line-height: 1.4;
-    background:
-      radial-gradient(900px 500px at -10% -10%, var(--bg-glow-1), transparent 60%),
-      radial-gradient(800px 500px at 110% 0%, var(--bg-glow-2), transparent 60%),
-      var(--bg);
-    background-attachment: fixed;
-    padding-inline: 16px;
-    padding-block: calc(16px + env(safe-area-inset-top, 0px)) 120px;
-  }
-  .wrap { max-width: 1480px; margin-inline: auto; display: flex; flex-direction: column; gap: 18px; }
-  h1, h2, h3 { font-family: var(--display); margin: 0; text-wrap: balance; font-weight: 600; }
-  button, input, select { font: inherit; color: inherit; }
-  button { cursor: pointer; }
-  :focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
-  [hidden] { display: none !important; }
-
-  .btn { border: 0; border-radius: 999px; padding: 10px 18px; font-weight: 800; background: var(--accent); color: var(--accent-ink); box-shadow: var(--shadow); }
-  .btn.soft { background: var(--surface); color: var(--ink); box-shadow: none; border: 1px solid var(--line); }
-  .btn.small { padding: 6px 12px; font-size: .9rem; }
-  .btn:disabled { opacity: .35; cursor: default; }
-  .btn.danger { background: transparent; color: var(--accent); border: 1px solid var(--accent); box-shadow: none; }
-  input, select { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; min-width: 0; }
-  label.field { display: flex; flex-direction: column; gap: 6px; font-weight: 700; font-size: .9rem; color: var(--muted); }
-
-  /* Header */
-  .top { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; }
-  .hello h1 { font-size: clamp(1.6rem, 4.2vw, 2.6rem); font-weight: 700; }
-  .hello p { margin: 2px 0 0; color: var(--muted); font-weight: 700; }
-  .top-right { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
-  .clock { font-family: var(--display); font-weight: 600; font-size: clamp(1.8rem, 4vw, 2.6rem); font-variant-numeric: tabular-nums; letter-spacing: .01em; }
-  .star-pill { display: inline-flex; align-items: center; gap: 6px; background: var(--surface); border: 1px solid var(--line); border-radius: 999px; padding: 8px 14px; font-weight: 800; box-shadow: var(--shadow); }
-  .star-pill .s { color: var(--sun); }
-  .icon-btn { width: 44px; height: 44px; border-radius: 50%; border: 1px solid var(--line); background: var(--surface); display: grid; place-items: center; font-size: 1.2rem; }
-
-  /* Tabs */
-  .tabs { display: flex; gap: 6px; background: var(--surface); border: 1px solid var(--line); border-radius: 999px; padding: 5px; width: fit-content; box-shadow: var(--shadow); }
-  .tab { border: 0; background: transparent; border-radius: 999px; padding: 8px 16px; font-weight: 800; color: var(--muted); display: flex; gap: 6px; align-items: center; }
-  .tab[aria-selected="true"] { background: var(--ink); color: var(--surface); }
-  @media (max-width: 760px) {
-    .tabs { position: fixed; left: 12px; right: 12px; bottom: calc(10px + env(safe-area-inset-bottom, 0px)); width: auto; justify-content: space-between; z-index: 20; }
-    .tab { flex-direction: column; gap: 0; padding: 6px 4px; font-size: .72rem; flex: 1; }
-    .tab .ti { font-size: 1.3rem; }
-  }
-
-  /* People chips */
-  .people { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
-  .chip { display: inline-flex; align-items: center; gap: 8px; border: 2px solid transparent; background: var(--surface); border-radius: 999px; padding: 4px 14px 4px 4px; font-weight: 800; box-shadow: var(--shadow); }
-  .chip[aria-pressed="true"] { border-color: var(--ink); }
-  .chip .count { color: var(--muted); font-weight: 700; font-variant-numeric: tabular-nums; }
-  .avatar { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; font-size: 1.15rem; flex: none; background: var(--c, var(--line)); }
-  .avatar.lg { width: 52px; height: 52px; font-size: 1.7rem; }
-  .avatar.sm { width: 26px; height: 26px; font-size: .9rem; }
-
-  /* Week board */
-  .weeknav { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-  .weeknav h2 { font-size: 1.3rem; margin-right: auto; font-variant-numeric: tabular-nums; }
-  .week { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 12px; }
-  @media (max-width: 1000px) { .week { grid-template-columns: minmax(0, 1fr); } }
-  .day { background: var(--surface); border-radius: var(--radius); padding: 12px; display: flex; flex-direction: column; gap: 8px; min-height: 260px; box-shadow: var(--shadow); border: 2px solid transparent; min-width: 0; }
-  @media (max-width: 1000px) { .day { min-height: 0; } }
-  .day.is-today { border-color: var(--accent); background: linear-gradient(var(--today), var(--surface) 140px); }
-  .day.is-past { opacity: .72; }
-  .day-head { display: flex; align-items: center; gap: 8px; }
-  .day-head .num { font-family: var(--display); font-weight: 700; font-size: 2rem; line-height: 1; font-variant-numeric: tabular-nums; }
-  .day-head .name { font-weight: 800; color: var(--muted); text-transform: uppercase; letter-spacing: .07em; font-size: .78rem; }
-  .day-head .today-tag { background: var(--accent); color: var(--accent-ink); border-radius: 999px; padding: 2px 8px; font-size: .72rem; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
-  .day-head .plus { margin-left: auto; width: 32px; height: 32px; border-radius: 50%; border: 1px dashed var(--line); background: transparent; color: var(--muted); font-size: 1.2rem; line-height: 1; }
-  .meal { display: flex; align-items: center; gap: 8px; border: 1px dashed var(--line); background: transparent; border-radius: 12px; padding: 6px 10px; text-align: left; color: var(--muted); font-weight: 700; font-size: .9rem; }
-  .meal.set { border-style: solid; color: var(--ink); background: var(--surface-2); }
-  .free { color: var(--muted); margin: 4px 2px; font-size: .92rem; }
-
-  /* Task card */
-  .item { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 8px 10px 8px 8px; border-radius: 14px; background: var(--surface-2); border-left: 6px solid var(--c, var(--line)); transition: transform .15s ease, opacity .2s; }
-  .check { width: 30px; height: 30px; border-radius: 50%; border: 2.5px solid var(--c, var(--muted)); background: transparent; display: grid; place-items: center; color: transparent; font-weight: 900; flex: none; padding: 0; }
-  .item.done .check { background: var(--c, var(--mint)); color: #fff; }
-  .item .t { font-weight: 800; overflow-wrap: break-word; hyphens: auto; }
-  .item.compact { grid-template-columns: auto minmax(0, 1fr); gap: 8px; padding: 8px 6px 8px 6px; border-left-width: 5px; position: relative; }
-  .item.compact .check { width: 24px; height: 24px; border-width: 2px; font-size: .8rem; }
-  .item.compact .t { font-size: .92rem; line-height: 1.25; padding-right: 14px; }
-  .item.compact .meta { font-size: .75rem; gap: 2px 6px; }
-  .item.compact .del { position: absolute; top: 2px; right: 0; font-size: .85rem; padding: 2px 4px; }
-  .item.done .t { text-decoration: line-through; color: var(--muted); font-weight: 600; }
-  .item .meta { display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: .8rem; color: var(--muted); font-weight: 700; margin-top: 2px; }
-  .item .meta .stars { color: var(--sun); }
-  .item .del { border: 0; background: transparent; color: var(--muted); font-size: 1.1rem; padding: 2px 6px; border-radius: 8px; opacity: .55; }
-  .item .del:hover { opacity: 1; }
-  .item.event { background: transparent; border: 1.5px dashed var(--c, var(--line)); border-left: 6px solid var(--c, var(--line)); grid-template-columns: auto minmax(0, 1fr); }
-  .item.event .t { font-weight: 700; }
-  .cal-icon { width: 30px; text-align: center; font-size: 1.15rem; }
-  .item.compact .cal-icon { width: 24px; font-size: .95rem; }
-  body.kiosk .item.event .cal-icon { width: 38px; }
-  .icon-btn { position: relative; }
-  .icon-btn .badge { position: absolute; top: 4px; right: 4px; width: 10px; height: 10px; border-radius: 50%; background: var(--accent); border: 2px solid var(--surface); }
-  @media (prefers-reduced-motion: no-preference) { .icon-btn.spinning .spin { display: inline-block; animation: spin 1s linear infinite; } }
-  @keyframes spin { to { transform: rotate(360deg); } }
-  .gcal-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 6px 0; }
-  .gcal-row .n { font-weight: 800; }
-  .gcal-row .s { color: var(--muted); font-size: .85rem; font-weight: 600; }
-  .gcal-row .acts { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
-  .cal-choice { display: flex; align-items: center; gap: 10px; padding: 8px 4px; border-bottom: 1px solid var(--line); font-weight: 700; }
-  .cal-choice input { width: 22px; height: 22px; accent-color: var(--accent); }
-  .cal-choice .sw { width: 14px; height: 14px; border-radius: 4px; flex: none; }
-  @media (prefers-reduced-motion: no-preference) { .item.pop { animation: pop .45s ease; } }
-  @keyframes pop { 0% { transform: scale(1); } 40% { transform: scale(1.05); } 100% { transform: scale(1); } }
-
-  /* Today board */
-  .today-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; }
-  .person-col { background: var(--surface); border-radius: var(--radius); padding: 14px; box-shadow: var(--shadow); display: flex; flex-direction: column; gap: 10px; border-top: 6px solid var(--c, var(--line)); min-width: 0; }
-  .person-head { display: flex; align-items: center; gap: 10px; }
-  .person-head h3 { font-size: 1.3rem; }
-  .person-head .sub { color: var(--muted); font-weight: 700; font-size: .85rem; }
-  .ring { margin-left: auto; position: relative; width: 48px; height: 48px; }
-  .ring svg { transform: rotate(-90deg); }
-  .ring span { position: absolute; inset: 0; display: grid; place-items: center; font-size: .78rem; font-weight: 800; font-variant-numeric: tabular-nums; }
-  .tonight { display: flex; align-items: center; gap: 12px; background: var(--surface); border-radius: var(--radius); padding: 14px 18px; box-shadow: var(--shadow); font-weight: 800; }
-  .tonight .big { font-size: 1.8rem; }
-  .tonight .lbl { color: var(--muted); font-size: .8rem; text-transform: uppercase; letter-spacing: .07em; }
-
-  /* Panels (Meals / Groceries / Stars) */
-  .panel { background: var(--surface); border-radius: var(--radius); padding: 18px; box-shadow: var(--shadow); display: flex; flex-direction: column; gap: 12px; min-width: 0; }
-  .panel h2 { font-size: 1.4rem; }
-  .muted { color: var(--muted); }
-  .meal-row { display: grid; grid-template-columns: 110px minmax(0, 1fr); align-items: center; gap: 10px; }
-  .meal-row .d { font-weight: 800; }
-  .meal-row.is-today .d { color: var(--accent); }
-  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
-  .row > input { flex: 1; }
-  .groc { display: flex; align-items: center; gap: 10px; padding: 8px 6px; border-bottom: 1px solid var(--line); }
-  .groc:last-child { border-bottom: 0; }
-  .groc .t { flex: 1; font-weight: 700; overflow-wrap: anywhere; }
-  .groc.done .t { text-decoration: line-through; color: var(--muted); }
-  .two { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); gap: 16px; align-items: start; }
-  @media (max-width: 860px) { .two { grid-template-columns: minmax(0, 1fr); } }
-  .leader { display: grid; grid-template-columns: 34px auto minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 10px 4px; border-bottom: 1px solid var(--line); }
-  .leader:last-child { border-bottom: 0; }
-  .leader .rank { font-family: var(--display); font-size: 1.4rem; text-align: center; }
-  .leader .name { font-weight: 800; }
-  .leader .streak { color: var(--muted); font-size: .85rem; font-weight: 700; }
-  .leader .pts { font-family: var(--display); font-size: 1.4rem; font-variant-numeric: tabular-nums; }
-  .bar { height: 18px; background: var(--surface-2); border-radius: 999px; overflow: hidden; border: 1px solid var(--line); }
-  .bar > i { display: block; height: 100%; background: linear-gradient(90deg, var(--sun), var(--accent)); border-radius: 999px; transition: width .6s ease; }
-  .goal-title { font-family: var(--display); font-size: 1.5rem; }
-
-  /* FAB */
-  .fab { position: fixed; right: 20px; bottom: calc(24px + env(safe-area-inset-bottom, 0px)); width: 64px; height: 64px; border-radius: 50%; border: 0; background: var(--accent); color: var(--accent-ink); font-size: 2rem; line-height: 1; box-shadow: 0 10px 30px rgba(255, 90, 126, .45); z-index: 25; }
-  @media (max-width: 760px) { .fab { bottom: calc(96px + env(safe-area-inset-bottom, 0px)); right: 16px; } }
-
-  /* Sheets */
-  dialog { border: 0; border-radius: 24px; padding: 0; width: min(560px, calc(100vw - 24px)); max-height: calc(100vh - 32px); background: var(--surface); color: var(--ink); box-shadow: 0 30px 80px rgba(0, 0, 0, .3); }
-  dialog::backdrop { background: rgba(17, 19, 42, .45); backdrop-filter: blur(3px); }
-  .sheet { padding: 20px; display: flex; flex-direction: column; gap: 14px; }
-  .sheet-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-  .sheet-head h2 { font-size: 1.5rem; }
-  .who { display: flex; gap: 8px; flex-wrap: wrap; }
-  .who button { border: 2px solid transparent; background: var(--surface-2); border-radius: 999px; padding: 4px 12px 4px 4px; display: flex; align-items: center; gap: 6px; font-weight: 800; }
-  .who button[aria-pressed="true"] { border-color: var(--ink); }
-  .starpick { display: flex; gap: 4px; }
-  .starpick button { border: 0; background: transparent; font-size: 1.7rem; padding: 0 2px; filter: grayscale(1); opacity: .45; }
-  .starpick button.on { filter: none; opacity: 1; }
-  .days { display: flex; gap: 6px; flex-wrap: wrap; }
-  .days button { width: 42px; height: 42px; border-radius: 50%; border: 1px solid var(--line); background: var(--surface-2); font-weight: 800; }
-  .days button[aria-pressed="true"] { background: var(--ink); color: var(--surface); border-color: var(--ink); }
-  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-  .emojis { display: flex; gap: 4px; flex-wrap: wrap; }
-  .emojis button { width: 40px; height: 40px; border-radius: 50%; border: 2px solid transparent; background: var(--surface-2); font-size: 1.2rem; }
-  .emojis button[aria-pressed="true"] { border-color: var(--ink); }
-  .member-row { display: flex; align-items: center; gap: 10px; padding: 6px 0; }
-  .member-row .n { flex: 1; font-weight: 800; }
-  .divider { border: 0; border-top: 1px solid var(--line); margin: 4px 0; width: 100%; }
-  .code { font-family: ui-monospace, monospace; font-size: .85rem; background: var(--surface-2); padding: 8px 10px; border-radius: 10px; overflow-wrap: anywhere; }
-
-  /* Setup */
-  .hero { max-width: 620px; margin: 8vh auto 0; text-align: center; display: flex; flex-direction: column; gap: 18px; align-items: center; }
-  .hero h1 { font-size: clamp(2rem, 6vw, 3.2rem); font-weight: 700; }
-  .hero p { color: var(--muted); font-size: 1.1rem; margin: 0; max-width: 46ch; }
-  .hero .faces { font-size: 2.6rem; letter-spacing: .1em; }
-  .hero .panel { width: 100%; text-align: left; }
-
-  /* Toast + confetti */
-  .toast { position: fixed; left: 50%; bottom: calc(110px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%) translateY(20px); background: var(--ink); color: var(--surface); padding: 12px 20px; border-radius: 999px; font-weight: 800; opacity: 0; transition: opacity .25s, transform .25s; z-index: 50; pointer-events: none; max-width: calc(100vw - 32px); text-align: center; }
-  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
-  #confetti { position: fixed; inset: 0; pointer-events: none; z-index: 40; }
-  .error { background: var(--today); border-radius: 14px; padding: 12px 16px; font-weight: 700; }
-
-  /* Wall display */
-  body.kiosk { padding-bottom: 24px; }
-  body.kiosk .edit-only { display: none !important; }
-  body.kiosk .clock { font-size: clamp(2.6rem, 6vw, 4.2rem); }
-  body.kiosk .item { padding: 12px; font-size: 1.15rem; }
-  body.kiosk .check { width: 38px; height: 38px; }
-</style>
+<link rel="stylesheet" href="styles.css">
 </head>
 <body>
 <canvas id="confetti" aria-hidden="true"></canvas>
@@ -249,7 +21,7 @@
   <div class="hero">
     <div class="faces" aria-hidden="true">🦊🐻🐼🦄</div>
     <h1>Your family's week, all in one happy place</h1>
-    <p>Chores, plans, dinners, and groceries on one shared board. Earn stars, keep streaks, and celebrate together.</p>
+    <p>Calendars, chores, routines, meals, lists, and rewards on one shared board. Earn stars, keep streaks, and celebrate together.</p>
     <div class="panel">
       <label class="field" for="familyNameInput">Family name
         <input id="familyNameInput" placeholder="e.g. The Dalals" maxlength="40">
@@ -270,6 +42,7 @@
       <p id="dateLine"></p>
     </div>
     <div class="top-right">
+      <span class="weather-pill" id="weatherPill" hidden></span>
       <span class="star-pill" title="Stars earned this week"><span class="s">★</span><span id="weekStars">0</span> this week</span>
       <span class="clock" id="clock">--:--</span>
       <button class="icon-btn edit-only" id="syncBtn" type="button" aria-label="Sync my Google Calendar" title="Sync my Google Calendar" hidden><span class="spin" aria-hidden="true">🔄</span></button>
@@ -277,12 +50,13 @@
     </div>
   </header>
 
-  <nav class="tabs edit-only" role="tablist" aria-label="Views">
-    <button class="tab" role="tab" data-view="week"><span class="ti" aria-hidden="true">📅</span><span>Week</span></button>
-    <button class="tab" role="tab" data-view="today"><span class="ti" aria-hidden="true">☀️</span><span>Today</span></button>
+  <nav class="tabs" role="tablist" aria-label="Views">
+    <button class="tab" role="tab" data-view="calendar"><span class="ti" aria-hidden="true">📅</span><span>Calendar</span></button>
+    <button class="tab" role="tab" data-view="today"><span class="ti" aria-hidden="true">✅</span><span>Chores</span></button>
+    <button class="tab" role="tab" data-view="routines"><span class="ti" aria-hidden="true">🌅</span><span>Routines</span></button>
     <button class="tab" role="tab" data-view="meals"><span class="ti" aria-hidden="true">🍽️</span><span>Meals</span></button>
-    <button class="tab" role="tab" data-view="groceries"><span class="ti" aria-hidden="true">🛒</span><span>Groceries</span></button>
-    <button class="tab" role="tab" data-view="stars"><span class="ti" aria-hidden="true">⭐</span><span>Stars</span></button>
+    <button class="tab" role="tab" data-view="lists"><span class="ti" aria-hidden="true">📝</span><span>Lists</span></button>
+    <button class="tab" role="tab" data-view="rewards"><span class="ti" aria-hidden="true">⭐</span><span>Rewards</span></button>
   </nav>
 
   <div id="error" class="error" hidden></div>
@@ -290,44 +64,91 @@
   <main id="view"></main>
 </div>
 
-<button id="fab" class="fab edit-only" type="button" aria-label="Add a task" hidden>+</button>
+<button id="fab" class="fab edit-only" type="button" aria-label="Add to the board" hidden>+</button>
 
 <dialog id="taskSheet" aria-labelledby="taskSheetTitle">
   <form class="sheet" id="taskForm" autocomplete="off">
     <div class="sheet-head"><h2 id="taskSheetTitle">Add to the board</h2><button type="button" class="icon-btn" data-close aria-label="Close">✕</button></div>
+    <div class="seg" id="tType" role="group" aria-label="Type">
+      <button type="button" data-type="chore" aria-pressed="true">✅ Chore</button>
+      <button type="button" data-type="event" aria-pressed="false">📅 Event</button>
+    </div>
     <label class="field" for="tTitle">What's happening?
       <input id="tTitle" maxlength="80" placeholder="Soccer practice, feed the dog, piano…" required>
     </label>
-    <div class="field">Who
+    <div class="field"><span id="tWhoLabel">Who (tap more than one to give everyone their own copy)</span>
       <div class="who" id="tWho"></div>
     </div>
     <div class="grid2">
       <label class="field" for="tDate">Day<input id="tDate" type="date" required></label>
       <label class="field" for="tTime">Time (optional)<input id="tTime" type="time"></label>
     </div>
-    <div class="field">Stars for finishing
+    <label class="field" for="tEnd" id="tEndWrap" hidden>Ends (optional)<input id="tEnd" type="time"></label>
+    <div class="field" id="tStarsWrap">Stars for finishing
       <div class="starpick" id="tStars"></div>
     </div>
-    <label class="field" for="tRepeat">Repeat
-      <select id="tRepeat">
-        <option value="none">Just once</option>
-        <option value="daily">Every day</option>
-        <option value="weekdays">Weekdays (Mon–Fri)</option>
-        <option value="weekly">On certain days</option>
-      </select>
-    </label>
+    <div class="grid2">
+      <label class="field" for="tRepeat">Repeat
+        <select id="tRepeat">
+          <option value="none">Just once</option>
+          <option value="daily">Every day</option>
+          <option value="weekdays">Weekdays (Mon–Fri)</option>
+          <option value="weekly">On certain days</option>
+        </select>
+      </label>
+      <label class="field" for="tRoutine" id="tRoutineWrap">Part of a routine
+        <select id="tRoutine">
+          <option value="">No</option>
+          <option value="morning">🌅 Morning</option>
+          <option value="afternoon">🌤️ Afternoon</option>
+          <option value="evening">🌙 Evening</option>
+        </select>
+      </label>
+    </div>
     <div class="days" id="tDays" hidden></div>
-    <button class="btn" type="submit">Add it</button>
+    <button class="btn" type="submit" id="tSubmit">Add it</button>
+    <button class="btn danger small" type="button" id="tDelete" hidden>Delete</button>
   </form>
 </dialog>
 
 <dialog id="mealSheet" aria-labelledby="mealSheetTitle">
   <form class="sheet" id="mealForm" autocomplete="off">
-    <div class="sheet-head"><h2 id="mealSheetTitle">Dinner</h2><button type="button" class="icon-btn" data-close aria-label="Close">✕</button></div>
-    <label class="field" for="mealInput">What's for dinner?
-      <input id="mealInput" maxlength="60" placeholder="Taco night 🌮">
-    </label>
+    <div class="sheet-head"><h2 id="mealSheetTitle">Meals</h2><button type="button" class="icon-btn" data-close aria-label="Close">✕</button></div>
+    <label class="field" for="mBreakfast">🥞 Breakfast<input id="mBreakfast" data-meal="breakfast" maxlength="60"></label>
+    <label class="field" for="mLunch">🥪 Lunch<input id="mLunch" data-meal="lunch" maxlength="60"></label>
+    <label class="field" for="mDinner">🍝 Dinner<input id="mDinner" data-meal="dinner" maxlength="60" placeholder="Taco night 🌮"></label>
+    <label class="field" for="mSnack">🍎 Snack<input id="mSnack" data-meal="snack" maxlength="60"></label>
+    <div class="field" id="mFavWrap">Family favorites (tap to fill)
+      <div class="fav-chips" id="mFavs"></div>
+    </div>
     <button class="btn" type="submit">Save</button>
+  </form>
+</dialog>
+
+<dialog id="countdownSheet" aria-labelledby="cdTitle">
+  <form class="sheet" id="cdForm" autocomplete="off">
+    <div class="sheet-head"><h2 id="cdTitle">Countdowns</h2><button type="button" class="icon-btn" data-close aria-label="Close">✕</button></div>
+    <div id="cdList"></div>
+    <hr class="divider">
+    <h3>Add a countdown</h3>
+    <label class="field" for="cdName">What are you counting down to?<input id="cdName" maxlength="40" placeholder="Lily's birthday, Hawaii trip…" required></label>
+    <div class="grid2">
+      <label class="field" for="cdDate">Date<input id="cdDate" type="date" required></label>
+      <label class="field" for="cdEmoji">Emoji<input id="cdEmoji" maxlength="4" value="🎉"></label>
+    </div>
+    <label class="cal-choice" for="cdYearly"><input id="cdYearly" type="checkbox"> Every year (birthdays, anniversaries)</label>
+    <button class="btn" type="submit">Add countdown</button>
+  </form>
+</dialog>
+
+<dialog id="pinSheet" aria-labelledby="pinTitle">
+  <form class="sheet" id="pinForm" autocomplete="off">
+    <div class="sheet-head"><h2 id="pinTitle">Grown-ups only</h2><button type="button" class="icon-btn" data-close aria-label="Close">✕</button></div>
+    <label class="field" for="pinInput">Enter the parent PIN
+      <input id="pinInput" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="8" autocomplete="off">
+    </label>
+    <p class="muted" id="pinMsg" style="margin:0"></p>
+    <button class="btn" type="submit">Unlock</button>
   </form>
 </dialog>
 
@@ -346,18 +167,47 @@
     </form>
     <hr class="divider">
     <h3>Google Calendar</h3>
-    <p class="muted" style="margin:0" id="gcalIntro">Each person connects their own Google Calendar from their own phone. Events show on everyone's board, including the wall display. The board can only read calendars, never change them, and never sees passwords.</p>
+    <p class="muted" style="margin:0">Each person connects their own Google Calendar from their own phone. Events show on everyone's board, including the wall display. The board can only read calendars, never change them, and never sees passwords.</p>
     <div id="gcalRows"></div>
     <hr class="divider">
-    <h3>Repeating chores</h3>
+    <h3>Repeating chores and routines</h3>
     <div id="sChores"></div>
     <hr class="divider">
-    <h3>Weekly family reward</h3>
-    <div class="grid2">
-      <label class="field" for="sRewardTitle">Reward<input id="sRewardTitle" maxlength="40" placeholder="Pizza & movie night"></label>
-      <label class="field" for="sRewardStars">Stars needed<input id="sRewardStars" type="number" min="1" max="999" placeholder="40"></label>
+    <h3>Weather</h3>
+    <div class="row">
+      <input id="sCity" maxlength="60" placeholder="City, e.g. San Jose" aria-label="City for weather">
+      <select id="sUnit" aria-label="Temperature unit"><option value="fahrenheit">°F</option><option value="celsius">°C</option></select>
+      <button id="sSaveCity" class="btn soft small" type="button">Save</button>
     </div>
-    <button id="sSaveReward" class="btn soft small" type="button">Save reward</button>
+    <p class="muted" id="sCityNow" style="margin:0"></p>
+    <hr class="divider">
+    <h3>Photo screensaver (wall display)</h3>
+    <p class="muted" style="margin:0">Photos play on the wall display when nobody has touched it for a while. They are shrunk before upload and are visible to anyone with the family link.</p>
+    <div class="row">
+      <label class="btn soft small" for="sPhotoInput" style="cursor:pointer">📷 Add photos</label>
+      <input id="sPhotoInput" type="file" accept="image/*" multiple hidden>
+      <label class="field" for="sSaverMins" style="flex-direction:row;align-items:center">Start after
+        <select id="sSaverMins"><option value="0">Off</option><option value="2">2 min</option><option value="5">5 min</option><option value="10">10 min</option><option value="30">30 min</option></select>
+      </label>
+      <button id="sSlideshow" class="btn soft small" type="button">▶ Preview</button>
+    </div>
+    <div class="thumbs" id="sPhotos"></div>
+    <hr class="divider">
+    <h3>Sleep mode (wall display)</h3>
+    <div class="row">
+      <label class="cal-choice" for="sSleepOn" style="border:0"><input id="sSleepOn" type="checkbox"> Dim the screen at night</label>
+      <label class="field" for="sSleepStart" style="flex-direction:row;align-items:center">from <input id="sSleepStart" type="time" value="21:30"></label>
+      <label class="field" for="sSleepEnd" style="flex-direction:row;align-items:center">to <input id="sSleepEnd" type="time" value="06:30"></label>
+      <button id="sSaveSleep" class="btn soft small" type="button">Save</button>
+    </div>
+    <hr class="divider">
+    <h3>Parent PIN</h3>
+    <p class="muted" style="margin:0">Keeps little hands out of settings and the reward shop. This is a kid lock, not real security.</p>
+    <div class="row">
+      <input id="sPin" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="8" placeholder="4–8 digits" aria-label="New parent PIN">
+      <button id="sSavePin" class="btn soft small" type="button">Set PIN</button>
+      <button id="sClearPin" class="btn danger small" type="button">Remove PIN</button>
+    </div>
     <hr class="divider">
     <h3>Share</h3>
     <p class="muted" style="margin:0">Anyone with the family link can see and change the board. Share it only with family.</p>
@@ -380,907 +230,27 @@
   </div>
 </dialog>
 
+<div id="saver" class="saver" hidden>
+  <img id="saverImgA" alt="">
+  <img id="saverImgB" alt="">
+  <div class="saver-info">
+    <div class="saver-clock" id="saverClock"></div>
+    <div class="saver-date" id="saverDate"></div>
+    <div class="saver-next" id="saverNext"></div>
+  </div>
+</div>
+
+<div id="sleep" class="sleep" hidden>
+  <div class="sleep-clock" id="sleepClock"></div>
+  <div class="sleep-hint">Tap to wake</div>
+</div>
+
 <div id="toast" class="toast" role="status" aria-live="polite"></div>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="firebase-config.js"></script>
-<script>
-(() => {
-  const PALETTE = ['#FF8FA3', '#7BD3B9', '#FFC857', '#9C8CFF', '#6EC1FF', '#FF9F68', '#9BE07A', '#F78CD9'];
-  const EMOJI = ['🦊', '🐻', '🐼', '🐨', '🦁', '🐯', '🐸', '🐵', '🦄', '🐙', '🐢', '🐝', '🌸', '⭐', '🚀', '⚽', '🎸', '🧁'];
-  const DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-  const CHEERS = ['Nice work', 'Woohoo', 'Way to go', 'Superstar', 'Awesome', 'High five', 'Nailed it'];
-  const COLLECTIONS = ['tasks', 'chores', 'completions', 'meals', 'groceries'];
-
-  const $ = (s) => document.querySelector(s);
-  const params = new URLSearchParams(location.search);
-  const KIOSK = params.has('kiosk');
-  const store = {
-    get(k) { try { return localStorage.getItem(k); } catch (_) { return null; } },
-    set(k, v) { try { localStorage.setItem(k, v); } catch (_) {} },
-    del(k) { try { localStorage.removeItem(k); } catch (_) {} },
-  };
-
-  const state = {
-    familyId: params.get('family') || store.get('familyId'),
-    family: { name: '', members: [], reward: null },
-    tasks: [], chores: [], completions: {}, meals: {}, groceries: [], events: [],
-    view: KIOSK ? 'today' : (store.get('view') || 'week'),
-    filter: 'all', offset: 0, lastDay: '',
-  };
-  let db = null;
-  let unsubs = [];
-
-  // ---------- Helpers ----------
-  const pad = (n) => String(n).padStart(2, '0');
-  const dayKey = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-  const parseKey = (k) => { const [y, m, d] = k.split('-').map(Number); return new Date(y, m - 1, d); };
-  const today0 = () => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; };
-  const addDays = (d, n) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
-  const mondayOf = (d) => addDays(d, -((d.getDay() + 6) % 7));
-  const weekKeys = (start) => [...Array(7)].map((_, i) => dayKey(addDays(start, i)));
-  const fmtTime = (t) => {
-    if (!t) return '';
-    const [h, m] = t.split(':').map(Number);
-    const d = new Date(); d.setHours(h, m, 0, 0);
-    return d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
-  };
-  const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
-
-  function el(tag, props = {}, ...kids) {
-    const n = document.createElement(tag);
-    for (const [k, v] of Object.entries(props)) {
-      if (v == null || v === false) continue;
-      if (k === 'class') n.className = v;
-      else if (k === 'text') n.textContent = v;
-      else if (k === 'style') n.style.cssText = v;
-      else if (k.startsWith('on')) n.addEventListener(k.slice(2), v);
-      else n.setAttribute(k, v === true ? '' : v);
-    }
-    for (const c of kids.flat()) if (c != null && c !== false) n.append(c);
-    return n;
-  }
-
-  const famRef = () => db.collection('families').doc(state.familyId);
-  const col = (name) => famRef().collection(name);
-
-  function normMembers(raw) {
-    return (raw || []).map((m, i) => typeof m === 'string'
-      ? { id: m, name: m, emoji: EMOJI[i % EMOJI.length], color: PALETTE[i % PALETTE.length] }
-      : m);
-  }
-  const memberById = (id) => state.family.members.find((m) => m.id === id);
-  const memberIdFromTask = (t) => t.memberId || (state.family.members.find((m) => m.name === t.member) || {}).id || '';
-  const avatar = (m, size = '') => el('span', { class: 'avatar ' + size, style: `--c:${m ? m.color : 'var(--line)'}`, 'aria-hidden': 'true', text: m ? m.emoji : '🙂' });
-
-  function toast(msg) {
-    const t = $('#toast');
-    t.textContent = msg;
-    t.classList.add('show');
-    clearTimeout(toast.timer);
-    toast.timer = setTimeout(() => t.classList.remove('show'), 2600);
-  }
-
-  function showError(msg) { const e = $('#error'); e.textContent = msg || ''; e.hidden = !msg; }
-  const fail = (e) => { console.error(e); showError('That change did not save. Check your internet connection and try again.'); };
-
-  // ---------- Items (one-off tasks + repeating chores) ----------
-  function repeatsOn(c, dow) {
-    if (c.repeat === 'daily') return true;
-    if (c.repeat === 'weekdays') return dow >= 1 && dow <= 5;
-    if (c.repeat === 'weekly') return (c.days || []).includes(dow);
-    return false;
-  }
-
-  function itemsFor(key, memberFilter = state.filter) {
-    const dow = parseKey(key).getDay();
-    const one = state.tasks.filter((t) => t.date === key).map((t) => ({
-      kind: 'task', id: t.id, title: t.title, memberId: memberIdFromTask(t), time: t.time || '',
-      points: Number(t.points) || 1, done: !!t.done, date: key,
-    }));
-    const rec = state.chores.filter((c) => (!c.start || c.start <= key) && repeatsOn(c, dow)).map((c) => {
-      const cid = `${c.id}_${key}`;
-      return {
-        kind: 'chore', id: c.id, cid, title: c.title, memberId: c.memberId, time: c.time || '',
-        points: Number(c.points) || 1, done: !!(state.completions[cid] && state.completions[cid].done), date: key, repeat: c.repeat,
-      };
-    });
-    const cal = state.events.filter((e) => e.date === key).map((e) => ({
-      kind: 'event', id: e.id, title: e.title, memberId: e.memberId, time: e.time || '', endTime: e.endTime || '',
-      allDay: !!e.allDay, points: 0, done: false, date: key,
-    }));
-    const sortTime = (i) => (i.allDay ? '00:00' : i.time || '99');
-    return [...one, ...rec, ...cal]
-      .filter((i) => memberFilter === 'all' || i.memberId === memberFilter)
-      .sort((a, b) => (a.done - b.done) || (sortTime(a) < sortTime(b) ? -1 : sortTime(a) > sortTime(b) ? 1 : 0) || String(a.title).localeCompare(String(b.title)));
-  }
-  const isTodo = (i) => i.kind !== 'event';
-
-  // Stars and streaks for the current calendar week (Mon–Sun).
-  function scoreboard() {
-    const keys = new Set(weekKeys(mondayOf(today0())));
-    const pts = {}; const doneDays = {};
-    const add = (memberId, points, date) => {
-      if (!memberId) return;
-      (doneDays[memberId] = doneDays[memberId] || new Set()).add(date);
-      if (keys.has(date)) pts[memberId] = (pts[memberId] || 0) + points;
-    };
-    for (const t of state.tasks) if (t.done) add(memberIdFromTask(t), Number(t.points) || 1, t.date);
-    for (const c of Object.values(state.completions)) if (c.done) add(c.memberId, Number(c.points) || 1, c.date);
-    const streak = (id) => {
-      const days = doneDays[id] || new Set();
-      let d = today0();
-      if (!days.has(dayKey(d))) d = addDays(d, -1);
-      let n = 0;
-      while (days.has(dayKey(d))) { n++; d = addDays(d, -1); }
-      return n;
-    };
-    const rows = state.family.members.map((m) => ({ m, points: pts[m.id] || 0, streak: streak(m.id) }))
-      .sort((a, b) => b.points - a.points || b.streak - a.streak);
-    const total = rows.reduce((s, r) => s + r.points, 0);
-    return { rows, total };
-  }
-
-  // ---------- Writes ----------
-  async function toggleItem(item, done, node) {
-    try {
-      if (item.kind === 'task') await col('tasks').doc(item.id).update({ done, doneAt: done ? Date.now() : null });
-      else if (done) await col('completions').doc(item.cid).set({ done: true, choreId: item.id, memberId: item.memberId || '', points: item.points, date: item.date, at: Date.now() });
-      else await col('completions').doc(item.cid).delete();
-      if (done) celebrate(item, node);
-    } catch (e) { fail(e); }
-  }
-
-  async function deleteItem(item) {
-    const msg = item.kind === 'chore' ? `Remove the repeating chore "${item.title}" from every day?` : `Delete "${item.title}"?`;
-    if (!confirm(msg)) return;
-    try {
-      if (item.kind === 'chore') await col('chores').doc(item.id).delete();
-      else await col('tasks').doc(item.id).delete();
-    } catch (e) { fail(e); }
-  }
-
-  async function saveMembers(members) {
-    try { await famRef().update({ members }); } catch (e) { fail(e); }
-  }
-
-  // ---------- Celebration ----------
-  const confetti = { parts: [], running: false };
-  function celebrate(item, node) {
-    const m = memberById(item.memberId);
-    toast(`${pick(CHEERS)}${m ? ', ' + m.name : ''}! +${item.points} ★`);
-    if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-    const r = node ? node.getBoundingClientRect() : { left: innerWidth / 2, top: innerHeight / 2, width: 0, height: 0 };
-    const x = r.left + r.width / 2, y = r.top + r.height / 2;
-    const colors = [m ? m.color : '#FF8FA3', '#FFC857', '#7BD3B9', '#9C8CFF', '#FF5A7E'];
-    for (let i = 0; i < 70; i++) {
-      const a = Math.random() * Math.PI * 2, s = 3 + Math.random() * 6;
-      confetti.parts.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s - 4, r: 3 + Math.random() * 4, c: pick(colors), life: 60 + Math.random() * 30, rot: Math.random() * 6 });
-    }
-    if (!confetti.running) { confetti.running = true; requestAnimationFrame(drawConfetti); }
-  }
-  function drawConfetti() {
-    const cv = $('#confetti'); const ctx = cv.getContext('2d');
-    if (cv.width !== innerWidth || cv.height !== innerHeight) { cv.width = innerWidth; cv.height = innerHeight; }
-    ctx.clearRect(0, 0, cv.width, cv.height);
-    confetti.parts = confetti.parts.filter((p) => p.life > 0);
-    for (const p of confetti.parts) {
-      p.vy += 0.25; p.x += p.vx; p.y += p.vy; p.life--; p.rot += 0.2;
-      ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.rot); ctx.fillStyle = p.c;
-      ctx.globalAlpha = Math.min(1, p.life / 30); ctx.fillRect(-p.r, -p.r / 2, p.r * 2, p.r); ctx.restore();
-    }
-    if (confetti.parts.length) requestAnimationFrame(drawConfetti);
-    else { confetti.running = false; ctx.clearRect(0, 0, cv.width, cv.height); }
-  }
-
-  // ---------- Rendering ----------
-  function eventCard(item, { compact = false, showWho = true } = {}) {
-    const m = memberById(item.memberId);
-    const who = showWho && m && state.filter === 'all';
-    const when = item.allDay ? 'All day' : fmtTime(item.time) + (item.endTime && !compact ? ` – ${fmtTime(item.endTime)}` : '');
-    const meta = el('div', { class: 'meta' },
-      who && compact ? el('span', { title: m.name, text: m.emoji }) : null,
-      el('span', { text: when }),
-      compact ? null : el('span', { text: 'Google Calendar' }),
-      who && !compact ? el('span', { text: `${m.emoji} ${m.name}` }) : null);
-    return el('div', { class: 'item event' + (compact ? ' compact' : ''), style: `--c:${m ? m.color : 'var(--line)'}`, title: 'From Google Calendar' },
-      el('span', { class: 'cal-icon', 'aria-hidden': 'true', text: '📅' }),
-      el('div', {}, el('div', { class: 't', text: item.title }), meta));
-  }
-
-  function itemCard(item, { compact = false, showWho = true } = {}) {
-    if (item.kind === 'event') return eventCard(item, { compact, showWho });
-    const m = memberById(item.memberId);
-    const repeatName = { daily: 'Daily', weekdays: 'Weekdays', weekly: 'Weekly' }[item.repeat] || '';
-    const node = el('div', { class: 'item' + (item.done ? ' done' : ''), style: `--c:${m ? m.color : 'var(--line)'}` });
-    const check = el('button', {
-      class: 'check', type: 'button', text: '✓', 'aria-pressed': String(item.done),
-      'aria-label': `${item.done ? 'Mark not done' : 'Mark done'}: ${item.title}`,
-      onclick: () => {
-        node.classList.add('pop');
-        toggleItem(item, !item.done, node);
-      },
-    });
-    const who = showWho && m && state.filter === 'all';
-    const meta = el('div', { class: 'meta' },
-      who && compact ? el('span', { title: m.name, text: m.emoji }) : null,
-      item.time ? el('span', { text: (compact ? '' : '🕒 ') + fmtTime(item.time) }) : null,
-      el('span', { class: 'stars', title: `${item.points} stars`, text: '★'.repeat(Math.min(item.points, 5)) }),
-      item.kind === 'chore' ? el('span', { title: `Repeats: ${repeatName}`, text: compact ? '🔁' : `🔁 ${repeatName}` }) : null,
-      who && !compact ? el('span', { text: `${m.emoji} ${m.name}` }) : null);
-    if (compact) node.classList.add('compact');
-    node.append(check, el('div', {}, el('div', { class: 't', text: item.title }), meta));
-    if (!KIOSK) node.append(el('button', { class: 'del', type: 'button', text: '✕', 'aria-label': `Delete ${item.title}`, onclick: () => deleteItem(item) }));
-    return node;
-  }
-
-  function renderHeader() {
-    const now = new Date();
-    const h = now.getHours();
-    const hi = h < 5 ? 'Good night' : h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening';
-    $('#greeting').textContent = `${hi}, ${state.family.name || 'family'}!`;
-    $('#dateLine').textContent = now.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
-    $('#clock').textContent = now.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
-    $('#weekStars').textContent = String(scoreboard().total);
-    document.querySelectorAll('.tab').forEach((t) => t.setAttribute('aria-selected', String(t.dataset.view === state.view)));
-  }
-
-  function renderPeople() {
-    const box = $('#people');
-    const showChips = ['week', 'today'].includes(state.view) && state.family.members.length > 0 && !KIOSK;
-    box.hidden = !showChips;
-    if (!showChips) return;
-    const todayKey = dayKey(today0());
-    const left = (id) => itemsFor(todayKey, id).filter((i) => isTodo(i) && !i.done).length;
-    const chip = (id, label, m) => el('button', {
-      class: 'chip', type: 'button', 'aria-pressed': String(state.filter === id),
-      onclick: () => { state.filter = state.filter === id ? 'all' : id; render(); },
-    }, m ? avatar(m) : el('span', { class: 'avatar', text: '👨‍👩‍👧' }), label, el('span', { class: 'count', title: 'Left today', text: String(left(id)) }));
-    box.replaceChildren(chip('all', 'Everyone', null), ...state.family.members.map((m) => chip(m.id, m.name, m)));
-  }
-
-  function emptyFamily() {
-    return el('div', { class: 'panel' },
-      el('h2', { text: 'Who is in your family?' }),
-      el('p', { class: 'muted', style: 'margin:0', text: 'Add each person with a fun avatar. Then add chores, plans, and dinners, and start earning stars.' }),
-      el('div', {}, el('button', { class: 'btn', type: 'button', text: 'Add family members', onclick: openSettings })));
-  }
-
-  function renderWeek() {
-    const start = addDays(mondayOf(today0()), state.offset * 7);
-    const todayKey = dayKey(today0());
-    const end = addDays(start, 6);
-    const fmt = (d) => d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-    const nav = el('div', { class: 'weeknav' },
-      el('h2', { text: state.offset === 0 ? `This week · ${fmt(start)} – ${fmt(end)}` : `${fmt(start)} – ${fmt(end)}` }),
-      el('button', { class: 'btn soft small', type: 'button', text: '‹ Prev', onclick: () => { state.offset--; render(); } }),
-      el('button', { class: 'btn soft small', type: 'button', text: 'This week', disabled: state.offset === 0 ? true : null, onclick: () => { state.offset = 0; render(); } }),
-      el('button', { class: 'btn soft small', type: 'button', text: 'Next ›', onclick: () => { state.offset++; render(); } }));
-    const days = weekKeys(start).map((key) => {
-      const d = parseKey(key);
-      const items = itemsFor(key);
-      const meal = state.meals[key];
-      return el('section', { class: 'day' + (key === todayKey ? ' is-today' : '') + (key < todayKey ? ' is-past' : ''), 'aria-label': d.toDateString() },
-        el('div', { class: 'day-head' },
-          el('span', { class: 'num', text: String(d.getDate()) }),
-          el('span', { class: 'name', text: DOW[d.getDay()] }),
-          key === todayKey ? el('span', { class: 'today-tag', text: 'Today' }) : null,
-          KIOSK ? null : el('button', { class: 'plus', type: 'button', text: '+', 'aria-label': `Add on ${d.toDateString()}`, onclick: () => openTaskSheet(key) })),
-        el('button', { class: 'meal' + (meal ? ' set' : ''), type: 'button', onclick: () => openMealSheet(key) }, '🍽️ ', meal ? meal : 'Add dinner'),
-        ...(items.length ? items.map((i) => itemCard(i, { compact: !matchMedia('(max-width: 1000px)').matches })) : [el('p', { class: 'free', text: 'Free day ✨' })]));
-    });
-    return el('div', { class: 'wrap', style: 'gap:12px' }, nav, el('div', { class: 'week' }, days));
-  }
-
-  function ring(done, total, color) {
-    if (!/^#[0-9a-fA-F]{6}$/.test(color)) color = '#9C8CFF';
-    const r = 20, c = 2 * Math.PI * r, f = total ? done / total : 0;
-    const svg = `<svg width="48" height="48" viewBox="0 0 48 48" aria-hidden="true"><circle cx="24" cy="24" r="${r}" fill="none" stroke="var(--line)" stroke-width="6"/><circle cx="24" cy="24" r="${r}" fill="none" stroke="${color}" stroke-width="6" stroke-linecap="round" stroke-dasharray="${c}" stroke-dashoffset="${c * (1 - f)}"/></svg>`;
-    const box = el('div', { class: 'ring', title: `${done} of ${total} done` });
-    box.innerHTML = svg;
-    box.append(el('span', { text: `${done}/${total}` }));
-    return box;
-  }
-
-  function renderToday() {
-    const key = dayKey(today0());
-    const meal = state.meals[key];
-    const people = state.filter === 'all' ? state.family.members : state.family.members.filter((m) => m.id === state.filter);
-    const cols = people.map((m) => {
-      const items = itemsFor(key, m.id);
-      const todos = items.filter(isTodo);
-      const done = todos.filter((i) => i.done).length;
-      return el('section', { class: 'person-col', style: `--c:${m.color}` },
-        el('div', { class: 'person-head' }, avatar(m, 'lg'),
-          el('div', {}, el('h3', { text: m.name }), el('div', { class: 'sub', text: todos.length ? (done === todos.length ? 'All done! 🎉' : `${todos.length - done} to go`) : items.length ? 'No chores today' : 'Nothing today' })),
-          ring(done, todos.length, m.color)),
-        ...(items.length ? items.map((i) => itemCard(i, { showWho: false })) : [el('p', { class: 'free', text: 'Free as a bird 🐦' })]));
-    });
-    const unassigned = itemsFor(key, 'all').filter((i) => !memberById(i.memberId));
-    if (unassigned.length && state.filter === 'all') {
-      cols.push(el('section', { class: 'person-col' }, el('div', { class: 'person-head' }, el('span', { class: 'avatar lg', text: '🙌' }), el('h3', { text: 'Anyone' })), ...unassigned.map(itemCard)));
-    }
-    const top = el('div', { class: 'tonight' },
-      el('span', { class: 'big', 'aria-hidden': 'true', text: '🍽️' }),
-      el('div', { style: 'flex:1' }, el('div', { class: 'lbl', text: 'Tonight' }), el('div', { text: meal || 'No dinner planned yet' })),
-      KIOSK ? null : el('button', { class: 'btn soft small', type: 'button', text: meal ? 'Change' : 'Plan dinner', onclick: () => openMealSheet(key) }));
-    return el('div', { class: 'wrap', style: 'gap:14px' }, top, el('div', { class: 'today-grid' }, cols));
-  }
-
-  function renderMeals() {
-    const start = addDays(mondayOf(today0()), state.offset * 7);
-    const todayKey = dayKey(today0());
-    const rows = weekKeys(start).map((key) => {
-      const d = parseKey(key);
-      const input = el('input', { id: 'meal-' + key, maxlength: '60', placeholder: 'Add dinner…', 'aria-label': `Dinner on ${d.toDateString()}` });
-      input.value = state.meals[key] || '';
-      input.addEventListener('change', () => saveMeal(key, input.value));
-      return el('div', { class: 'meal-row' + (key === todayKey ? ' is-today' : '') },
-        el('span', { class: 'd', text: d.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric' }) }), input);
-    });
-    return el('div', { class: 'panel' },
-      el('div', { class: 'weeknav' }, el('h2', { text: '🍽️ Meal plan' }),
-        el('button', { class: 'btn soft small', type: 'button', text: '‹', 'aria-label': 'Previous week', onclick: () => { state.offset--; render(); } }),
-        el('button', { class: 'btn soft small', type: 'button', text: '›', 'aria-label': 'Next week', onclick: () => { state.offset++; render(); } })),
-      el('p', { class: 'muted', style: 'margin:0', text: 'Type a dinner and tap away. It saves for everyone.' }),
-      ...rows);
-  }
-
-  function renderGroceries() {
-    const items = [...state.groceries].sort((a, b) => (a.done - b.done) || ((a.createdAt || 0) - (b.createdAt || 0)));
-    const input = el('input', { id: 'grocInput', maxlength: '60', placeholder: 'Milk, bananas, birthday candles…', 'aria-label': 'Grocery item' });
-    const form = el('form', { class: 'row', autocomplete: 'off', onsubmit: async (e) => {
-      e.preventDefault();
-      const v = input.value.trim();
-      if (!v) return;
-      input.value = '';
-      try { await col('groceries').add({ title: v, done: false, createdAt: Date.now() }); } catch (err) { fail(err); }
-      document.getElementById('grocInput')?.focus();
-    } }, input, el('button', { class: 'btn', type: 'submit', text: 'Add' }));
-    const list = items.map((g) => {
-      const node = el('div', { class: 'groc' + (g.done ? ' done' : '') },
-        el('button', { class: 'check', type: 'button', text: '✓', style: g.done ? 'background:var(--mint);color:#fff;border-color:var(--mint)' : '', 'aria-label': `${g.done ? 'Uncheck' : 'Check'} ${g.title}`,
-          onclick: () => col('groceries').doc(g.id).update({ done: !g.done }).catch(fail) }),
-        el('span', { class: 't', text: g.title }),
-        el('button', { class: 'del btn soft small', type: 'button', text: '✕', 'aria-label': `Remove ${g.title}`, onclick: () => col('groceries').doc(g.id).delete().catch(fail) }));
-      return node;
-    });
-    const doneCount = items.filter((g) => g.done).length;
-    return el('div', { class: 'panel' },
-      el('h2', { text: '🛒 Grocery list' }), form,
-      list.length ? el('div', {}, list) : el('p', { class: 'muted', text: 'The list is empty. Add what you need and check things off in the store.' }),
-      doneCount ? el('div', {}, el('button', { class: 'btn soft small', type: 'button', text: `Clear ${doneCount} checked`, onclick: async () => {
-        try { for (const g of items.filter((x) => x.done)) await col('groceries').doc(g.id).delete(); } catch (e) { fail(e); }
-      } })) : null);
-  }
-
-  function renderStars() {
-    const { rows, total } = scoreboard();
-    const medals = ['🥇', '🥈', '🥉'];
-    const board = el('div', { class: 'panel' }, el('h2', { text: '⭐ This week’s stars' }),
-      rows.length ? rows.map((r, i) => el('div', { class: 'leader' },
-        el('span', { class: 'rank', text: r.points > 0 ? (medals[i] || String(i + 1)) : String(i + 1) }),
-        avatar(r.m),
-        el('div', {}, el('div', { class: 'name', text: r.m.name }), el('div', { class: 'streak', text: r.streak ? `🔥 ${r.streak}-day streak` : 'Start a streak today' })),
-        el('span', { class: 'pts', text: `${r.points} ★` })))
-        : el('p', { class: 'muted', text: 'Add family members to start earning stars.' }),
-      el('p', { class: 'muted', style: 'margin:0;font-size:.9rem', text: 'Stars reset every Monday. Finish anything on the board to earn its stars.' }));
-    const reward = state.family.reward;
-    const goal = reward && Number(reward.stars) > 0 ? Number(reward.stars) : 0;
-    const pct = goal ? Math.min(100, Math.round((total / goal) * 100)) : 0;
-    const rewardPanel = el('div', { class: 'panel' }, el('h2', { text: '🎁 Family reward' }),
-      goal
-        ? [el('div', { class: 'goal-title', text: reward.title || 'Family treat' }),
-          el('div', { class: 'bar', role: 'progressbar', 'aria-valuemin': '0', 'aria-valuemax': String(goal), 'aria-valuenow': String(Math.min(total, goal)) }, el('i', { style: `width:${pct}%` })),
-          el('p', { style: 'margin:0;font-weight:800', text: total >= goal ? `Unlocked! ${total} of ${goal} stars 🎉` : `${total} of ${goal} stars · ${goal - total} to go` })]
-        : [el('p', { class: 'muted', style: 'margin:0', text: 'Pick a treat the whole family works toward each week, like a movie night or a trip for ice cream.' }),
-          el('div', {}, el('button', { class: 'btn', type: 'button', text: 'Set a reward', onclick: openSettings }))]);
-    return el('div', { class: 'two' }, board, rewardPanel);
-  }
-
-  function render() {
-    state.lastDay = dayKey(today0());
-    renderHeader();
-    renderPeople();
-    renderSyncBtn();
-    $('#fab').hidden = KIOSK || !state.family.members.length || !['week', 'today'].includes(state.view);
-    let view;
-    if (!state.family.members.length && ['week', 'today', 'stars'].includes(state.view)) view = emptyFamily();
-    else if (state.view === 'today') view = renderToday();
-    else if (state.view === 'meals') view = renderMeals();
-    else if (state.view === 'groceries') view = renderGroceries();
-    else if (state.view === 'stars') view = renderStars();
-    else view = renderWeek();
-    // Live updates re-render the view: keep focus and any half-typed text in meal / grocery inputs.
-    const a = document.activeElement;
-    const keep = a && a.id && /^(meal-|grocInput)/.test(a.id) ? { id: a.id, value: a.value, pos: a.selectionStart } : null;
-    $('#view').replaceChildren(view);
-    if (keep) {
-      const n = document.getElementById(keep.id);
-      if (n) { n.value = keep.value; n.focus(); try { n.setSelectionRange(keep.pos, keep.pos); } catch (_) {} }
-    }
-    if (document.getElementById('settingsSheet').open) renderSettings();
-  }
-
-  // ---------- Sheets ----------
-  const sheetState = { who: '', stars: 1, days: [] };
-  function closeOnBackdrop(dlg) {
-    dlg.addEventListener('click', (e) => { if (e.target === dlg) dlg.close(); });
-    dlg.querySelectorAll('[data-close]').forEach((b) => b.addEventListener('click', () => dlg.close()));
-  }
-
-  function openTaskSheet(key) {
-    const members = state.family.members;
-    sheetState.who = state.filter !== 'all' ? state.filter : (members[0] ? members[0].id : '');
-    sheetState.stars = 1;
-    sheetState.days = [parseKey(key || dayKey(today0())).getDay()];
-    $('#tTitle').value = '';
-    $('#tDate').value = key || dayKey(today0());
-    $('#tTime').value = '';
-    $('#tRepeat').value = 'none';
-    drawTaskSheet();
-    $('#taskSheet').showModal();
-    $('#tTitle').focus();
-  }
-
-  function drawTaskSheet() {
-    $('#tWho').replaceChildren(...state.family.members.map((m) => el('button', {
-      type: 'button', 'aria-pressed': String(sheetState.who === m.id),
-      onclick: () => { sheetState.who = m.id; drawTaskSheet(); },
-    }, avatar(m, 'sm'), m.name)));
-    $('#tStars').replaceChildren(...[1, 2, 3, 4, 5].map((n) => el('button', {
-      type: 'button', class: n <= sheetState.stars ? 'on' : '', text: '⭐', 'aria-label': `${n} star${n > 1 ? 's' : ''}`,
-      onclick: () => { sheetState.stars = n; drawTaskSheet(); },
-    })));
-    const weekly = $('#tRepeat').value === 'weekly';
-    $('#tDays').hidden = !weekly;
-    $('#tDays').replaceChildren(...[1, 2, 3, 4, 5, 6, 0].map((d) => el('button', {
-      type: 'button', text: DOW[d].slice(0, 2), 'aria-pressed': String(sheetState.days.includes(d)), 'aria-label': DOW[d],
-      onclick: () => {
-        sheetState.days = sheetState.days.includes(d) ? sheetState.days.filter((x) => x !== d) : [...sheetState.days, d];
-        drawTaskSheet();
-      },
-    })));
-  }
-
-  async function submitTask(e) {
-    e.preventDefault();
-    const title = $('#tTitle').value.trim();
-    const date = $('#tDate').value;
-    if (!title || !date) return;
-    const base = { title, memberId: sheetState.who, time: $('#tTime').value || '', points: sheetState.stars, createdAt: Date.now() };
-    const repeat = $('#tRepeat').value;
-    $('#taskSheet').close();
-    try {
-      if (repeat === 'none') await col('tasks').add({ ...base, date, done: false });
-      else {
-        const days = repeat === 'weekly' ? (sheetState.days.length ? sheetState.days : [parseKey(date).getDay()]) : [];
-        await col('chores').add({ ...base, repeat, days, start: date });
-      }
-      toast(repeat === 'none' ? 'Added to the board ✨' : 'Repeating chore added 🔁');
-    } catch (err) { fail(err); }
-  }
-
-  let mealKey = '';
-  function openMealSheet(key) {
-    if (KIOSK) return;
-    mealKey = key;
-    $('#mealSheetTitle').textContent = `Dinner · ${parseKey(key).toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' })}`;
-    $('#mealInput').value = state.meals[key] || '';
-    $('#mealSheet').showModal();
-    $('#mealInput').focus();
-  }
-  async function saveMeal(key, value) {
-    const v = value.trim();
-    try {
-      if (v) await col('meals').doc(key).set({ title: v, date: key });
-      else await col('meals').doc(key).delete();
-    } catch (e) { fail(e); }
-  }
-
-  const settingsState = { emoji: EMOJI[0] };
-  function openSettings() {
-    $('#sFamilyName').value = state.family.name || '';
-    const r = state.family.reward || {};
-    $('#sRewardTitle').value = r.title || '';
-    $('#sRewardStars').value = r.stars || '';
-    const used = new Set(state.family.members.map((m) => m.emoji));
-    settingsState.emoji = EMOJI.find((e) => !used.has(e)) || EMOJI[0];
-    renderSettings();
-    $('#settingsSheet').showModal();
-  }
-
-  function renderSettings() {
-    const members = state.family.members;
-    $('#sMembers').replaceChildren(...(members.length ? members.map((m, i) => el('div', { class: 'member-row' },
-      avatar(m), el('span', { class: 'n', text: m.name }),
-      el('button', { class: 'btn soft small', type: 'button', text: '↑', 'aria-label': `Move ${m.name} up`, disabled: i === 0 ? true : null,
-        onclick: () => { const a = [...members]; [a[i - 1], a[i]] = [a[i], a[i - 1]]; saveMembers(a); } }),
-      el('button', { class: 'btn danger small', type: 'button', text: 'Remove', onclick: () => {
-        if (confirm(`Remove ${m.name}? Their tasks stay on the board as "Anyone".`)) saveMembers(members.filter((x) => x.id !== m.id));
-      } })))
-      : [el('p', { class: 'muted', style: 'margin:0', text: 'No one yet. Add your first family member below.' })]));
-    $('#sEmojis').replaceChildren(...EMOJI.map((e) => el('button', {
-      type: 'button', text: e, 'aria-pressed': String(settingsState.emoji === e), 'aria-label': `Avatar ${e}`,
-      onclick: () => { settingsState.emoji = e; renderSettings(); },
-    })));
-    const repeatLabel = (c) => c.repeat === 'daily' ? 'Every day' : c.repeat === 'weekdays' ? 'Weekdays' : (c.days || []).slice().sort((a, b) => ((a + 6) % 7) - ((b + 6) % 7)).map((d) => DOW[d]).join(', ');
-    $('#sChores').replaceChildren(...(state.chores.length ? state.chores.map((c) => {
-      const m = memberById(c.memberId);
-      return el('div', { class: 'member-row' }, avatar(m, 'sm'),
-        el('span', { class: 'n' }, c.title, el('span', { class: 'muted', style: 'font-weight:600', text: ` · ${repeatLabel(c)}${c.time ? ' · ' + fmtTime(c.time) : ''}` })),
-        el('button', { class: 'btn danger small', type: 'button', text: 'Remove', onclick: () => deleteItem({ kind: 'chore', id: c.id, title: c.title }) }));
-    }) : [el('p', { class: 'muted', style: 'margin:0', text: 'None yet. Use + and choose "Repeat" to add one.' })]));
-    $('#sCode').textContent = `Family code: ${state.familyId}`;
-    renderGcalRows();
-  }
-
-  async function copy(text, label) {
-    try { await navigator.clipboard.writeText(text); toast(`${label} copied 📋`); }
-    catch (_) { prompt('Copy this link:', text); }
-  }
-
-  // ---------- Google Calendar ----------
-  // Each person connects from their own device with Google's sign-in window (OAuth).
-  // The board gets a short-lived, read-only token; no passwords and no refresh tokens are stored.
-  // Imported events are copied into the family's shared "events" collection so every device sees them.
-  const GCAL_SCOPE = 'https://www.googleapis.com/auth/calendar.readonly';
-  const GCAL_API = 'https://www.googleapis.com/calendar/v3';
-  const gcalKey = () => `gcal:${state.familyId}`;
-  const gcalLocal = () => { try { return JSON.parse(store.get(gcalKey()) || 'null'); } catch (_) { return null; } };
-  const setGcalLocal = (v) => (v ? store.set(gcalKey(), JSON.stringify(v)) : store.del(gcalKey()));
-  const tokenCache = {
-    get() { try { const t = JSON.parse(sessionStorage.getItem('gcalToken') || 'null'); return t && t.exp > Date.now() ? t.token : null; } catch (_) { return null; } },
-    set(token, seconds) { try { sessionStorage.setItem('gcalToken', JSON.stringify({ token, exp: Date.now() + (seconds - 60) * 1000 })); } catch (_) {} },
-    clear() { try { sessionStorage.removeItem('gcalToken'); } catch (_) {} },
-  };
-  let syncing = false;
-
-  // Must be called directly from a tap: Google's sign-in opens a pop-up window.
-  function requestGoogleToken(prompt) {
-    return new Promise((resolve, reject) => {
-      const clientId = window.GOOGLE_CLIENT_ID;
-      if (!clientId) return reject(new Error('Google Calendar is not set up for this board yet. See the README.'));
-      if (!(window.google && google.accounts && google.accounts.oauth2)) return reject(new Error('Google sign-in did not load. Check your connection and try again.'));
-      const client = google.accounts.oauth2.initTokenClient({
-        client_id: clientId,
-        scope: GCAL_SCOPE,
-        callback: (resp) => {
-          if (resp.error) return reject(new Error(resp.error === 'access_denied' ? 'Calendar access was not allowed.' : (resp.error_description || resp.error)));
-          if (!google.accounts.oauth2.hasGrantedAllScopes(resp, GCAL_SCOPE)) return reject(new Error('Please tick the calendar box on the Google screen so the board can read events.'));
-          tokenCache.set(resp.access_token, Number(resp.expires_in) || 3600);
-          resolve(resp.access_token);
-        },
-        error_callback: (err) => reject(new Error(err && err.type === 'popup_closed' ? 'The Google window was closed before finishing.' : 'The Google window was blocked. Allow pop-ups for this site and try again.')),
-      });
-      client.requestAccessToken({ prompt });
-    });
-  }
-
-  async function gapi(token, path) {
-    const r = await fetch(GCAL_API + path, { headers: { Authorization: `Bearer ${token}` } });
-    if (r.status === 401) { tokenCache.clear(); const e = new Error('Google sign-in expired. Tap sync to reconnect.'); e.code = 'auth'; throw e; }
-    if (!r.ok) throw new Error(`Google Calendar returned an error (${r.status}). Try again in a minute.`);
-    return r.json();
-  }
-
-  function hashId(s) {
-    let h = 0x811c9dc5;
-    for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193); }
-    return (h >>> 0).toString(36);
-  }
-
-  // Turn Google events into one board entry per day they cover (multi-day events capped at 14 days).
-  function toBoardEvents(items, memberId) {
-    const out = new Map();
-    const hm = (d) => `${pad(d.getHours())}:${pad(d.getMinutes())}`;
-    for (const e of items) {
-      if (e.status === 'cancelled' || !e.start) continue;
-      const title = String(e.summary || 'Busy').slice(0, 200);
-      const put = (date, extra) => {
-        const id = `g-${memberId}-${hashId(`${e._cal}|${e.id}|${date}`)}`;
-        out.set(id, { title, date, memberId, source: 'google', allDay: false, time: '', endTime: '', ...extra });
-      };
-      if (e.start.date) {
-        let d = parseKey(e.start.date); const end = parseKey(e.end && e.end.date ? e.end.date : e.start.date);
-        for (let n = 0; (d < end || n === 0) && n < 14; n++, d = addDays(d, 1)) put(dayKey(d), { allDay: true });
-      } else if (e.start.dateTime) {
-        const s = new Date(e.start.dateTime); const en = new Date(e.end && e.end.dateTime ? e.end.dateTime : e.start.dateTime);
-        const sameDay = dayKey(s) === dayKey(en);
-        put(dayKey(s), { time: hm(s), endTime: sameDay ? hm(en) : '' });
-        // Continue overnight or multi-day timed events on the following days as all-day markers.
-        let d = addDays(parseKey(dayKey(s)), 1);
-        for (let n = 0; d < en && n < 13; n++, d = addDays(d, 1)) put(dayKey(d), { allDay: true });
-      }
-    }
-    return out;
-  }
-
-  async function syncCalendar(token, conn, { quiet = false } = {}) {
-    if (syncing) return;
-    syncing = true;
-    $('#syncBtn').classList.add('spinning');
-    try {
-      const from = addDays(today0(), -7), to = addDays(today0(), 60);
-      const items = [];
-      for (const calId of conn.calendars) {
-        let pageToken = '';
-        do {
-          const q = new URLSearchParams({ singleEvents: 'true', orderBy: 'startTime', maxResults: '250', timeMin: from.toISOString(), timeMax: to.toISOString() });
-          if (pageToken) q.set('pageToken', pageToken);
-          const j = await gapi(token, `/calendars/${encodeURIComponent(calId)}/events?${q}`);
-          for (const e of j.items || []) items.push({ ...e, _cal: calId });
-          pageToken = j.nextPageToken || '';
-        } while (pageToken);
-      }
-      const fresh = toBoardEvents(items, conn.memberId);
-      const fromKey = dayKey(from);
-      const mine = state.events.filter((e) => e.memberId === conn.memberId && e.source === 'google');
-      const ops = [];
-      for (const old of mine) if (old.date >= fromKey && !fresh.has(old.id)) ops.push((b) => b.delete(col('events').doc(old.id)));
-      const same = (a, b) => a && ['title', 'date', 'time', 'endTime', 'allDay'].every((k) => (a[k] || '') === (b[k] || ''));
-      for (const [id, data] of fresh) {
-        if (!same(mine.find((x) => x.id === id), data)) ops.push((b) => b.set(col('events').doc(id), { ...data, syncedAt: Date.now() }));
-      }
-      for (let i = 0; i < ops.length; i += 400) {
-        const batch = db.batch();
-        ops.slice(i, i + 400).forEach((op) => op(batch));
-        await batch.commit();
-      }
-      const members = state.family.members.map((m) => (m.id === conn.memberId ? { ...m, calendarSyncedAt: Date.now(), calendarConnected: true } : m));
-      await famRef().update({ members });
-      if (!quiet) toast(`Calendar synced 📅 ${fresh.size} event${fresh.size === 1 ? '' : 's'} on the board`);
-    } catch (e) {
-      if (!quiet || e.code !== 'auth') toast(e.message || 'Calendar sync failed. Try again.');
-      if (e.code !== 'auth') console.error(e);
-    } finally {
-      syncing = false;
-      $('#syncBtn').classList.remove('spinning');
-      renderSyncBtn();
-    }
-  }
-
-  // On open: sync silently if this device still holds a valid token (no pop-up).
-  function autoSyncCalendar() {
-    const conn = gcalLocal();
-    const token = tokenCache.get();
-    renderSyncBtn();
-    if (conn && token) setTimeout(() => syncCalendar(token, conn, { quiet: true }), 1500);
-  }
-
-  async function syncNow() {
-    const conn = gcalLocal();
-    if (!conn) { openSettings(); return; }
-    try {
-      const token = tokenCache.get() || await requestGoogleToken('');
-      await syncCalendar(token, conn);
-    } catch (e) { toast(e.message); }
-  }
-
-  let pendingConnect = null;
-  async function connectCalendar(memberId) {
-    try {
-      const token = await requestGoogleToken('consent');
-      const list = await gapi(token, '/users/me/calendarList?minAccessRole=reader');
-      const cals = (list.items || []).sort((a, b) => (b.primary ? 1 : 0) - (a.primary ? 1 : 0));
-      const prev = gcalLocal();
-      const chosen = new Set(prev && prev.memberId === memberId ? prev.calendars : cals.filter((c) => c.primary).map((c) => c.id));
-      pendingConnect = { token, memberId };
-      $('#calSheetTitle').textContent = `Pick ${memberById(memberId)?.name || 'your'}'s calendars`;
-      $('#calList').replaceChildren(...cals.map((c) => {
-        const box = el('input', { type: 'checkbox', value: c.id, id: 'cal-' + hashId(c.id) });
-        box.checked = chosen.has(c.id);
-        return el('label', { class: 'cal-choice', for: box.id }, box,
-          el('span', { class: 'sw', style: `background:${/^#[0-9a-fA-F]{6}$/.test(c.backgroundColor || '') ? c.backgroundColor : 'var(--line)'}` }),
-          el('span', { text: (c.summaryOverride || c.summary || c.id) + (c.primary ? ' (main)' : '') }));
-      }));
-      $('#settingsSheet').close();
-      $('#calSheet').showModal();
-    } catch (e) { toast(e.message); }
-  }
-
-  async function importChosen() {
-    if (!pendingConnect) return;
-    const calendars = [...document.querySelectorAll('#calList input:checked')].map((x) => x.value);
-    if (!calendars.length) { toast('Pick at least one calendar'); return; }
-    const conn = { memberId: pendingConnect.memberId, calendars };
-    const token = pendingConnect.token;
-    pendingConnect = null;
-    setGcalLocal(conn);
-    $('#calSheet').close();
-    await syncCalendar(token, conn);
-  }
-
-  async function disconnectCalendar(memberId) {
-    const m = memberById(memberId);
-    if (!confirm(`Disconnect ${m ? m.name + "'s" : 'this'} Google Calendar and remove its events from the board?`)) return;
-    try {
-      const mine = state.events.filter((e) => e.memberId === memberId && e.source === 'google');
-      for (let i = 0; i < mine.length; i += 400) {
-        const batch = db.batch();
-        mine.slice(i, i + 400).forEach((e) => batch.delete(col('events').doc(e.id)));
-        await batch.commit();
-      }
-      const conn = gcalLocal();
-      if (conn && conn.memberId === memberId) {
-        const token = tokenCache.get();
-        if (token && window.google && google.accounts && google.accounts.oauth2) google.accounts.oauth2.revoke(token, () => {});
-        tokenCache.clear();
-        setGcalLocal(null);
-      }
-      await saveMembers(state.family.members.map((x) => (x.id === memberId ? { ...x, calendarConnected: false, calendarSyncedAt: null } : x)));
-      toast('Calendar disconnected');
-      renderSyncBtn();
-    } catch (e) { fail(e); }
-  }
-
-  const ago = (t) => {
-    if (!t) return 'never';
-    const mins = Math.round((Date.now() - t) / 60000);
-    if (mins < 1) return 'just now';
-    if (mins < 60) return `${mins} min ago`;
-    const h = Math.round(mins / 60);
-    return h < 48 ? `${h} hr ago` : `${Math.round(h / 24)} days ago`;
-  };
-
-  function renderSyncBtn() {
-    const conn = gcalLocal();
-    const btn = $('#syncBtn');
-    btn.hidden = KIOSK || !conn || !memberById(conn.memberId);
-    if (btn.hidden) return;
-    const m = memberById(conn.memberId);
-    const stale = !m.calendarSyncedAt || Date.now() - m.calendarSyncedAt > 3 * 3600 * 1000;
-    btn.querySelector('.badge')?.remove();
-    if (stale) btn.append(el('span', { class: 'badge', 'aria-hidden': 'true' }));
-    btn.title = `Sync ${m.name}'s Google Calendar (last synced ${ago(m.calendarSyncedAt)})`;
-  }
-
-  function renderGcalRows() {
-    const conn = gcalLocal();
-    const configured = !!window.GOOGLE_CLIENT_ID;
-    $('#gcalRows').replaceChildren(...(!configured
-      ? [el('p', { class: 'error', style: 'margin:0', text: 'Google Calendar is not switched on for this board yet. The board owner needs to add a Google sign-in client ID (see README).' })]
-      : state.family.members.length ? state.family.members.map((m) => {
-        const here = conn && conn.memberId === m.id;
-        const status = m.calendarConnected ? `Connected · synced ${ago(m.calendarSyncedAt)}${here ? ' · this device' : ''}` : 'Not connected';
-        const acts = here
-          ? [el('button', { class: 'btn small', type: 'button', text: 'Sync now', onclick: syncNow }),
-            el('button', { class: 'btn soft small', type: 'button', text: 'Calendars', onclick: () => connectCalendar(m.id) }),
-            el('button', { class: 'btn danger small', type: 'button', text: 'Disconnect', onclick: () => disconnectCalendar(m.id) })]
-          : m.calendarConnected
-            ? [el('button', { class: 'btn danger small', type: 'button', text: 'Remove events', onclick: () => disconnectCalendar(m.id) })]
-            : [el('button', { class: 'btn soft small', type: 'button', text: `I'm ${m.name}: connect`, onclick: () => connectCalendar(m.id) })];
-        return el('div', { class: 'gcal-row' }, avatar(m),
-          el('div', {}, el('div', { class: 'n', text: m.name }), el('div', { class: 's', text: status })),
-          el('div', { class: 'acts' }, acts));
-      }) : [el('p', { class: 'muted', style: 'margin:0', text: 'Add family members first.' })]));
-  }
-
-  // ---------- Family lifecycle ----------
-  function watchFamily() {
-    unsubs.forEach((u) => u());
-    unsubs = [famRef().onSnapshot((doc) => {
-      const d = doc.data() || {};
-      state.family = { name: d.name || '', members: normMembers(d.members), reward: d.reward || null };
-      render();
-    }, fail)];
-    const listen = (name, apply) => unsubs.push(col(name).onSnapshot((snap) => { apply(snap.docs.map((x) => ({ id: x.id, ...x.data() }))); render(); }, fail));
-    listen('tasks', (rows) => { state.tasks = rows; });
-    listen('chores', (rows) => { state.chores = rows; });
-    listen('completions', (rows) => { state.completions = Object.fromEntries(rows.map((r) => [r.id, r])); });
-    listen('meals', (rows) => { state.meals = Object.fromEntries(rows.map((r) => [r.id, r.title || r.dinner || ''])); });
-    listen('groceries', (rows) => { state.groceries = rows; });
-    listen('events', (rows) => { state.events = rows; });
-    autoSyncCalendar();
-  }
-
-  function enterFamily(id) {
-    state.familyId = id;
-    store.set('familyId', id);
-    history.replaceState(null, '', location.pathname + (KIOSK ? '?kiosk=1' : ''));
-    $('#setup').hidden = true;
-    $('#app').hidden = false;
-    render();
-    watchFamily();
-  }
-
-  async function createFamily() {
-    const id = crypto.randomUUID().replace(/-/g, '');
-    const name = $('#familyNameInput').value.trim();
-    try {
-      await db.collection('families').doc(id).set({ name, members: [], createdAt: Date.now() });
-      enterFamily(id);
-      setTimeout(openSettings, 300);
-    } catch (e) { fail(e); }
-  }
-
-  async function joinFamily() {
-    const id = $('#joinCode').value.trim();
-    if (!id) return;
-    try {
-      const doc = await db.collection('families').doc(id).get();
-      if (!doc.exists) { toast('No family found with that code'); return; }
-      enterFamily(id);
-    } catch (e) { fail(e); }
-  }
-
-  // ---------- Wiring ----------
-  function bind() {
-    $('#createBtn').addEventListener('click', createFamily);
-    $('#joinBtn').addEventListener('click', joinFamily);
-    document.querySelectorAll('.tab').forEach((t) => t.addEventListener('click', () => {
-      state.view = t.dataset.view; state.offset = 0; store.set('view', state.view); render(); scrollTo({ top: 0 });
-    }));
-    $('#fab').addEventListener('click', () => openTaskSheet(state.view === 'week' && state.offset !== 0 ? dayKey(addDays(mondayOf(today0()), state.offset * 7)) : dayKey(today0())));
-    $('#settingsBtn').addEventListener('click', openSettings);
-    $('#taskForm').addEventListener('submit', submitTask);
-    $('#tRepeat').addEventListener('change', drawTaskSheet);
-    $('#mealForm').addEventListener('submit', (e) => { e.preventDefault(); $('#mealSheet').close(); saveMeal(mealKey, $('#mealInput').value); });
-    ['#taskSheet', '#mealSheet', '#settingsSheet', '#calSheet'].forEach((s) => closeOnBackdrop($(s)));
-    $('#syncBtn').addEventListener('click', syncNow);
-    $('#calImport').addEventListener('click', importChosen);
-
-    $('#sSaveName').addEventListener('click', () => famRef().update({ name: $('#sFamilyName').value.trim() }).then(() => toast('Saved')).catch(fail));
-    $('#sMemberForm').addEventListener('submit', (e) => {
-      e.preventDefault();
-      const name = $('#sMemberName').value.trim();
-      if (!name) return;
-      const members = state.family.members;
-      const used = new Set(members.map((m) => m.color));
-      const color = PALETTE.find((c) => !used.has(c)) || PALETTE[members.length % PALETTE.length];
-      const m = { id: crypto.randomUUID().slice(0, 8), name, emoji: settingsState.emoji, color };
-      $('#sMemberName').value = '';
-      const nextUsed = new Set([...members.map((x) => x.emoji), m.emoji]);
-      settingsState.emoji = EMOJI.find((x) => !nextUsed.has(x)) || EMOJI[0];
-      saveMembers([...members, m]).then(() => toast(`Welcome, ${name}! ${m.emoji}`));
-    });
-    $('#sSaveReward').addEventListener('click', () => {
-      const title = $('#sRewardTitle').value.trim();
-      const stars = Math.max(0, Math.min(999, parseInt($('#sRewardStars').value, 10) || 0));
-      famRef().update({ reward: stars ? { title, stars } : null }).then(() => toast('Reward saved 🎁')).catch(fail);
-    });
-    const base = location.origin + location.pathname;
-    $('#sCopyShare').addEventListener('click', () => copy(`${base}?family=${state.familyId}`, 'Family link'));
-    $('#sCopyKiosk').addEventListener('click', () => copy(`${base}?family=${state.familyId}&kiosk=1`, 'Wall display link'));
-    $('#sLeave').addEventListener('click', () => {
-      if (!confirm('Leave this family on this device? You can rejoin with the family link.')) return;
-      unsubs.forEach((u) => u()); unsubs = [];
-      store.del('familyId');
-      state.familyId = null;
-      $('#settingsSheet').close();
-      $('#app').hidden = true; $('#setup').hidden = false;
-    });
-
-    setInterval(() => { if (dayKey(today0()) !== state.lastDay) render(); else renderHeader(); }, 20 * 1000);
-    // Week cards switch between compact (7 columns) and full (stacked days) layouts.
-    let wide = matchMedia('(max-width: 1000px)').matches;
-    addEventListener('resize', () => {
-      const now = matchMedia('(max-width: 1000px)').matches;
-      if (now !== wide && state.familyId) { wide = now; render(); }
-    });
-    if (KIOSK && 'wakeLock' in navigator) {
-      const lock = () => navigator.wakeLock.request('screen').catch(() => {});
-      lock();
-      document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') lock(); });
-    }
-  }
-
-  // ---------- Boot ----------
-  if (KIOSK) document.body.classList.add('kiosk');
-  const cfg = window.FIREBASE_CONFIG || {};
-  if (!cfg.apiKey || cfg.apiKey.startsWith('YOUR_')) {
-    document.body.prepend(el('p', { class: 'error', text: 'Add your Firebase keys to firebase-config.js first. See README.md.' }));
-    return;
-  }
-  firebase.initializeApp(cfg);
-  db = firebase.firestore();
-  bind();
-  if (params.get('family')) store.set('familyId', params.get('family'));
-  if (state.familyId) enterFamily(state.familyId);
-  else $('#setup').hidden = false;
-})();
-</script>
+<script src="app.js"></script>
 </body>
 </html>

@@ -685,6 +685,12 @@
         .sort((a, b) => (a.done - b.done) || ((a.createdAt || 0) - (b.createdAt || 0)));
       const left = items.filter((g) => !g.done).length;
       const input = el('input', { id: `listInput-${id}`, maxlength: '80', placeholder: `Add to ${name}…`, 'aria-label': `Add to ${name} list` });
+      input.addEventListener('paste', (e) => {
+        const text = (e.clipboardData || window.clipboardData)?.getData('text') || '';
+        if (!/\n/.test(text.trim())) return;
+        e.preventDefault();
+        openScanSheet({ lines: cleanListLines(text), store: id });
+      });
       const form = el('form', { class: 'row', autocomplete: 'off', onsubmit: async (e) => {
         e.preventDefault();
         const v = input.value.trim(); if (!v) return;
@@ -717,8 +723,137 @@
       el('div', { class: 'weeknav' }, el('h2', { text: '🛒 Groceries' }),
         seg([['all', 'All stores'], ...STORES.map(([id, e, n]) => [id, `${e} ${n}`])], shopAt,
           (v) => { state.shopAt = v; store.set('shopAt', v); render(); }, 'Shopping at')),
+      el('div', { class: 'row' },
+        btn('📷 Scan a list', () => $('#scanInput').click(), 'btn small'),
+        el('span', { class: 'muted', style: 'font-size:.9rem', text: 'Snap a shopping list or whiteboard. You can also paste several lines into any store box.' })),
       el('p', { class: 'muted', style: 'margin:0', text: 'In the store? Pick it above to see only that list, and tick things off as they go in the cart.' }),
       el('div', { class: 'stores' }, sections));
+  }
+
+  // ---------- Scan or paste a shopping list ----------
+  // Text recognition runs on the device with Tesseract (served from this site); nothing is uploaded.
+  const scan = { lines: [], worker: null, busy: false };
+  function loadScript(src) {
+    return new Promise((resolve, reject) => {
+      const s = document.createElement('script');
+      s.src = src; s.onload = resolve;
+      s.onerror = () => reject(new Error('Could not load the scanner. Check your connection and try again.'));
+      document.head.append(s);
+    });
+  }
+  async function ocrWorker() {
+    if (scan.worker) return scan.worker;
+    if (!window.Tesseract) await loadScript('vendor/ocr/tesseract.min.js');
+    const base = new URL('vendor/ocr/', location.href).href;
+    scan.worker = await Tesseract.createWorker('eng', 1, {
+      workerPath: base + 'worker.min.js', corePath: base, langPath: base, gzip: true,
+      logger: (m) => {
+        if (m.status === 'recognizing text') scanStatus(`Reading your list… ${Math.round((m.progress || 0) * 100)}%`);
+        else if (/load|initializ/i.test(m.status || '')) scanStatus('Getting the scanner ready (the first time takes a little while)…');
+      },
+    });
+    return scan.worker;
+  }
+  const scanStatus = (t) => { $('#scanStatus').textContent = t; };
+  // Turn raw text into shopping items: drop bullets, numbering, checkboxes, and noise.
+  function cleanListLines(text) {
+    const seen = new Set(); const out = [];
+    for (let line of String(text).split(/\r?\n|;/)) {
+      line = line.replace(/^[\s\-–—*•·●○◦▪■□☐☑✓✔>\[\]()_|]+/, '').replace(/^\d{1,2}\s*[.)]\s+/, '').replace(/\s{2,}/g, ' ').trim();
+      const letters = (line.match(/[A-Za-z\u00C0-\u024F\u0900-\u097F]/g) || []).length;
+      if (line.length < 2 || letters < 2 || letters / line.replace(/\s/g, '').length < 0.5) continue;
+      if (/^(my |our )?(shopping|grocery|groceries|costco|indian store|to ?buy|to-do|todo|list|need)( list)?\s*:?$/i.test(line)) continue;
+      const key = line.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key); out.push(line.slice(0, 80));
+      if (out.length >= 60) break;
+    }
+    return out;
+  }
+  function drawScanLines() {
+    $('#scanLines').replaceChildren(...scan.lines.map((l, i) => {
+      const box = el('input', { type: 'checkbox', class: 'shop-box', 'aria-label': 'Include this item' });
+      box.checked = l.on;
+      box.addEventListener('change', () => { l.on = box.checked; scanCount(); });
+      const txt = el('input', { maxlength: '80', 'aria-label': `Item ${i + 1}` });
+      txt.value = l.text;
+      txt.addEventListener('input', () => { l.text = txt.value; scanCount(); });
+      return el('div', { class: 'scan-line' }, box, txt);
+    }));
+    scanCount();
+  }
+  function scanCount() {
+    const n = scan.lines.filter((l) => l.on && l.text.trim()).length;
+    $('#scanAdd').textContent = n ? `Add ${n} item${n === 1 ? '' : 's'}` : 'Add items';
+    $('#scanAdd').disabled = !n || scan.busy;
+  }
+  function openScanSheet({ lines = [], store: target, image } = {}) {
+    scan.lines = lines.map((text) => ({ text, on: true }));
+    const preferred = target || (STORES.some((x) => x[0] === state.shopAt) ? state.shopAt : 'grocery');
+    $('#scanStore').replaceChildren(...STORES.map(([id, e, n]) => el('option', { value: id, text: `${e} ${n}` })));
+    $('#scanStore').value = preferred;
+    const prev = $('#scanPreview');
+    prev.hidden = !image; if (image) prev.src = image;
+    scanStatus(lines.length ? 'Untick anything that is wrong, fix spelling, then add.' : '');
+    drawScanLines();
+    if (!$('#scanSheet').open) $('#scanSheet').showModal();
+  }
+  // Shrink and boost contrast so handwriting and photos of boards read better.
+  function prepImage(file) {
+    return new Promise((resolve, reject) => {
+      const img = new Image(); const url = URL.createObjectURL(file);
+      img.onload = () => {
+        URL.revokeObjectURL(url);
+        const scale = Math.min(1, 1800 / Math.max(img.width, img.height));
+        const cv = document.createElement('canvas');
+        cv.width = Math.round(img.width * scale); cv.height = Math.round(img.height * scale);
+        const g = cv.getContext('2d'); g.drawImage(img, 0, 0, cv.width, cv.height);
+        const px = g.getImageData(0, 0, cv.width, cv.height); const d = px.data;
+        let lo = 255, hi = 0;
+        for (let i = 0; i < d.length; i += 4) { const y = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2]; d[i] = y; if (y < lo) lo = y; if (y > hi) hi = y; }
+        const span = Math.max(1, hi - lo);
+        for (let i = 0; i < d.length; i += 4) { const v = ((d[i] - lo) / span) * 255; d[i] = d[i + 1] = d[i + 2] = v; }
+        g.putImageData(px, 0, 0);
+        resolve({ canvas: cv, preview: cv.toDataURL('image/jpeg', 0.7) });
+      };
+      img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('That file is not a photo the board can read.')); };
+      img.src = url;
+    });
+  }
+  async function scanPhoto(file) {
+    scan.busy = true;
+    openScanSheet({ lines: [] });
+    scanStatus('Getting your photo ready…');
+    try {
+      const { canvas, preview } = await prepImage(file);
+      $('#scanPreview').src = preview; $('#scanPreview').hidden = false;
+      const worker = await ocrWorker();
+      const { data } = await worker.recognize(canvas);
+      const lines = cleanListLines(data.text || '');
+      scan.busy = false;
+      scan.lines = lines.map((text) => ({ text, on: true }));
+      scanStatus(lines.length
+        ? `Found ${lines.length} item${lines.length === 1 ? '' : 's'}. Untick anything wrong and fix spelling, then add.`
+        : "Couldn't read any items. Try a closer, brighter photo, or type them with “+ Add a line”.");
+      drawScanLines();
+    } catch (e) {
+      scan.busy = false; console.error(e);
+      scanStatus(e.message || 'Scanning failed. Try again.');
+      scanCount();
+    }
+  }
+  async function addScanned() {
+    const items = scan.lines.filter((l) => l.on && l.text.trim()).map((l) => l.text.trim().slice(0, 80));
+    if (!items.length) return;
+    const target = $('#scanStore').value;
+    try {
+      const batch = db.batch(); const now = Date.now();
+      items.forEach((title, i) => batch.set(col('groceries').doc(), { title, store: target, done: false, createdAt: now + i }));
+      await batch.commit();
+      $('#scanSheet').close();
+      const st = STORES.find((x) => x[0] === target);
+      toast(`Added ${items.length} item${items.length === 1 ? '' : 's'} to ${st ? st[2] : 'the list'} 🛒`);
+    } catch (e) { fail(e); }
   }
 
   // ---------- Rewards ----------
@@ -1574,7 +1709,10 @@
     $('#cdForm').addEventListener('submit', submitCountdown);
     $('#pinForm').addEventListener('submit', submitPin);
     $('#pinSheet').addEventListener('close', () => { if (pinResolve) { const r = pinResolve; pinResolve = null; r(false); } });
-    ['#taskSheet', '#mealSheet', '#settingsSheet', '#calSheet', '#countdownSheet', '#pinSheet'].forEach((s) => closeOnBackdrop($(s)));
+    ['#taskSheet', '#mealSheet', '#settingsSheet', '#calSheet', '#countdownSheet', '#pinSheet', '#scanSheet'].forEach((s) => closeOnBackdrop($(s)));
+    $('#scanInput').addEventListener('change', (e) => { const f = e.target.files[0]; e.target.value = ''; if (f) scanPhoto(f); });
+    $('#scanAdd').addEventListener('click', addScanned);
+    $('#scanAddLine').addEventListener('click', () => { scan.lines.push({ text: '', on: true }); drawScanLines(); const all = document.querySelectorAll('#scanLines input:not([type=checkbox])'); all[all.length - 1]?.focus(); });
     $('#syncBtn').addEventListener('click', syncNow);
     $('#calImport').addEventListener('click', importChosen);
 

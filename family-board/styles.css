@@ -361,3 +361,9 @@ body.kiosk { padding-bottom: 120px; }
 }
 .board-id { margin: -6px 0 0; color: var(--muted); font-size: .8rem; font-weight: 700; font-variant-numeric: tabular-nums; }
 .past-toggle { align-self: flex-start; }
+
+/* Scan a shopping list */
+.scan-preview { max-width: 100%; max-height: 180px; object-fit: contain; border-radius: 12px; background: var(--surface-2); align-self: center; }
+.scan-lines { display: flex; flex-direction: column; gap: 6px; max-height: 45vh; overflow-y: auto; }
+.scan-line { display: flex; align-items: center; gap: 10px; }
+.scan-line input:not([type=checkbox]) { flex: 1; }
